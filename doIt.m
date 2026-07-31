@@ -18,19 +18,24 @@ rateSource = 'parameterized';   % 'empirical' (current real-world age-specific r
                              % way, whether fertility gets rescaled is controlled by targetR0 below,
                              % not by this choice. See README "Rate source" for details/sources.
 ageMax     = 150;      % y, oldest age class (plus-group: survivors accumulate here)
-steepAgeFrac        = 0.144;    % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
-steepMortalityScale = 0.00053;  % extra-hazard scale added past steepAgeFrac*ageMax
-steepMortalityRate  = 0.084;    % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
+steepAgeFrac        = 0.0734;   % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
+steepMortalityScale = 0.000227; % extra-hazard scale added past steepAgeFrac*ageMax
+steepMortalityRate  = 0.0836;   % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
 nYears     = 500;     % y, simulation horizon
 popInit    = 8e9;   % total starting population, distributed across ages per the real-world
                        % 2021-2023 world age structure below (itself NOT the model's own stable age
                        % distribution, so the model's convergence to its own shape over time is visible)
 
-% Mortality: per-capita annual death rate, AGE-DEPENDENT, rising with age (Gompertz-like). Defaults
-% below are fit (least squares in log-hazard space, fminsearch) to the empirical mortality curve
-% (rateSource='empirical', including its old-age extrapolation) -- see populationModel.md Sec. 10.
-deathRateBase  = 0.0011;   % baseline hazard at age 0
-deathRateSlope = 0;        % additional hazard at age ageMax (hazard = base + slope*(age/ageMax)^2) -- fit to ~0: the empirical curve's rise is better captured by the cliff term alone (below) than a separate old-age-specific quadratic
+% Mortality: per-capita annual death rate, AGE-DEPENDENT, rising with age (Gompertz-like), PLUS a
+% distinct infant-mortality term (elevated hazard at birth, decaying away over early childhood) --
+% neither the baseline nor the cliff term alone can represent that childhood dip (both are
+% monotonically non-decreasing in age). Defaults below are fit jointly (least squares in log-hazard
+% space, fminsearch) to the empirical mortality curve (rateSource='empirical', including its old-age
+% extrapolation) -- see populationModel.md Sec. 10.
+infantMortalityScale = 0.0129;   % excess hazard at age 0 from the infant-mortality term
+infantMortalityDecay = 1.21;     % y, its decay time constant (hazard ~ exp(-age/this), so ~gone within a few years)
+deathRateBase  = 0.00066;  % baseline hazard at age 0 (excluding the infant term)
+deathRateSlope = 0.00057;  % additional hazard at age ageMax (hazard = base + slope*(age/ageMax)^2)
 
 % Fertility: per-capita annual fertility rate, AGE-DEPENDENT, triangular over a fertile age window
 % (zero outside it, so births only come from ages in [fertileMin fertileMax]), peaking at
@@ -60,7 +65,8 @@ nAge   = numel(ageVec);
 %%% age-specific rates (both birth and death vary with age, not constant across the population)
 switch rateSource
 case 'parameterized'
-    mortality = deathRateBase + deathRateSlope * (ageVec/ageMax).^2;   % per-capita annual hazard, increases with age
+    mortality = infantMortalityScale * exp(-ageVec/infantMortalityDecay) + ...   % elevated hazard at birth, decaying over early childhood
+                deathRateBase + deathRateSlope * (ageVec/ageMax).^2;             % per-capita annual hazard, increases with age
     steepAgeThreshold = steepAgeFrac * ageMax;
     pastSteepAge = ageVec > steepAgeThreshold;
     mortality(pastSteepAge) = mortality(pastSteepAge) + steepMortalityScale * (exp(steepMortalityRate*(ageVec(pastSteepAge)-steepAgeThreshold)) - 1);   % sharp senescence cliff past steepAgeFrac*ageMax

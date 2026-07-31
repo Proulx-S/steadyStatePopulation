@@ -7,7 +7,7 @@ cohorts forward in time. By default (`rateSource='parameterized'`) those rates a
 least squares to the world's actual current age-specific rates (see [Rate
 source](#rate-source)/[populationModel.md](populationModel.md) §10), so they closely track reality
 while staying analytically simple. By default (`targetR0=[]`) they're also left unscaled, so the
-model reports whatever net reproduction rate that fit implies (currently R0 ≈ 1.02) rather than
+model reports whatever net reproduction rate that fit implies (currently R0 ≈ 1.01) rather than
 forcing one — set `targetR0=1` to instead calibrate fertility so the population settles into a
 genuine **steady state**, the property this project is named for; see
 [`populationModel.md`](populationModel.md) for why that particular calibration works.
@@ -15,10 +15,10 @@ genuine **steady state**, the property this project is named for; see
 ![age-structured population model](figures/populationModel.png)
 
 - **top-left** — the age-dependent rates driving the model: mortality (red) and fertility (green)
-  by age, on a log axis (mortality alone spans ~4 orders of magnitude from age 0 to `ageMax`).
-  With the default parameterized rates these are smooth curves fit to the real data; switch to
-  `rateSource='empirical'` to see the real, unsmoothed age-band curves instead (a genuinely
-  U-shaped mortality curve, low through childhood/adulthood then rising sharply past ~50).
+  by age, on a log axis (mortality alone spans ~4 orders of magnitude from age 0 to `ageMax`). Both
+  rate sources show the same real U-shaped mortality pattern (high at birth, a childhood minimum,
+  then rising) — the default parameterized curves are a smooth fit to it (populationModel.md §10);
+  switch to `rateSource='empirical'` to see the real, unsmoothed age-band data instead.
 - **top-right** — total population over time. Its *shape* settles quickly regardless; whether the
   *total* itself levels off depends on [`targetR0`](#net-reproduction-rate-r0) — it doesn't by
   default (`targetR0=[]`, mild growth at whatever R0 the rates actually imply), but does with
@@ -48,7 +48,7 @@ to `targetR0` is a *separate*, independent choice — see [Net reproduction rate
 - **`'parameterized'`** (default) — smooth Gompertz-plus-senescence-cliff mortality (Eq. 1) and
   triangular fertility (Eq. 3) from [`populationModel.md`](populationModel.md). Its defaults aren't
   arbitrary: they're least-squares fit to the `'empirical'` curves below (§10), so even fully
-  unscaled (`targetR0=[]`) they land close to the real net reproduction rate (R0 ≈ 1.02 vs. the
+  unscaled (`targetR0=[]`) they land close to the real net reproduction rate (R0 ≈ 1.01 vs. the
   real ≈ 1.06).
 - **`'empirical'`** — the current real-world age-specific rates for the World: fertility from the
   2023 age-specific fertility rate by 5-year age band, and mortality from the 2021 life table's

@@ -30,21 +30,26 @@ genuine steady state — the property the project is named for.
 *(This section, and §3 below, describe the `rateSource='parameterized'` mode. §9 gives the
 `'empirical'` alternative -- the project's own default.)*
 
-Baseline hazard rises with age (Gompertz-like), plus a sharp senescence cliff past a configurable
-fraction $f_s$ (`steepAgeFrac`) of the maximum age:
+Three terms: a decaying excess hazard at birth (infant mortality), a slowly-rising baseline
+(Gompertz-like ageing), and a sharp senescence cliff past a configurable fraction $f_s$
+(`steepAgeFrac`) of the maximum age:
 
 $$
-\mu(a) = \underbrace{\mu_0 + \mu_1\left(\frac{a}{A}\right)^2}_{\text{baseline ageing}} \;+\;
+\mu(a) = \underbrace{\mu_i\, e^{-a/\tau_i}}_{\text{infant mortality}} \;+\;
+\underbrace{\mu_0 + \mu_1\left(\frac{a}{A}\right)^2}_{\text{baseline ageing}} \;+\;
 \underbrace{\mathbb{1}[a > f_s A]\cdot \mu_2\Big(e^{\,k\,(a - f_s A)} - 1\Big)}_{\text{senescence cliff}}
 \tag{1}
 $$
 
-where $\mu_0=$ `deathRateBase`, $\mu_1=$ `deathRateSlope`, $\mu_2=$ `steepMortalityScale`,
-$k=$ `steepMortalityRate`, and $\mathbb{1}[\cdot]$ is the indicator function. The cliff term is
+where $\mu_i=$ `infantMortalityScale`, $\tau_i=$ `infantMortalityDecay`, $\mu_0=$ `deathRateBase`,
+$\mu_1=$ `deathRateSlope`, $\mu_2=$ `steepMortalityScale`, $k=$ `steepMortalityRate`, and
+$\mathbb{1}[\cdot]$ is the indicator function. The infant term is what lets $\mu(a)$ have the real
+U-shape (high at birth, a childhood minimum, then rising) — neither of the other two terms is ever
+decreasing in $a$, so without it the model cannot represent that dip at all (§10). The cliff term is
 exactly zero at and before $a=f_s A$, then grows exponentially — with the current (fit, §10)
-defaults $f_s=0.144$, $A=150$, it kicks in at age $21.6$ and drives $\mu(150)\approx25.6$ (survival
-$\approx7\times10^{-12}$/yr) by `ageMax`. $\mu_1=0$ in the fit defaults: the cliff term alone
-captures the empirical curve's rise better than a separate baseline quadratic (§10).
+defaults $f_s=0.0734$, $A=150$, it kicks in at age $11.0$ (right where the infant term has mostly
+decayed away) and drives $\mu(150)\approx25.3$ (survival $\approx1.1\times10^{-11}$/yr) by
+`ageMax`.
 
 ## 2. Survival probability
 
@@ -207,24 +212,25 @@ replacement.)
 The `'parameterized'` defaults (Eqs. 1, 3) are not arbitrary hand-picks — they're a least-squares
 fit of those SAME functional forms to the `'empirical'` mortality/fertility curves of §9 (including
 §9's own old-age Gompertz extrapolation beyond age 84), via `fminsearch` (Nelder–Mead, unconstrained
-— parameters reparametrized through `exp`/logistic transforms to keep $\mu_0,\mu_1,\mu_2,k>0$ and
-$f_s\in(0,1)$).
+— parameters reparametrized through `exp`/logistic transforms to keep $\mu_i,\tau_i,\mu_0,\mu_1,\mu_2,k>0$
+and $f_s\in(0,1)$).
 
 **Mortality** is fit in LOG-hazard space (minimizing $\sum_a\big(\ln\mu_{\text{param}}(a)-\ln\mu_{\text{emp}}(a)\big)^2$)
-since $\mu$ spans several orders of magnitude with age. The fit found $\mu_1\approx0$: Eq. (1)'s
-baseline quadratic term contributes essentially nothing in the best fit — the senescence-cliff term
-alone, starting much younger ($f_sA\approx21.6$) than "late-life cliff" suggests, captures the
-empirical curve's overall rise better than baseline-plus-cliff can. This is an intrinsic limitation
-of Eq. (1), not a fitting failure: it has no mechanism for the empirical curve's early-childhood DIP
-(high at birth, lowest around age 5–14, then rising), since both of Eq. (1)'s terms are
-monotonically non-decreasing in age — the fit's residual concentrates there, not at the older ages
-that matter most for the model's long-run behavior.
+since $\mu$ spans several orders of magnitude with age. A first pass *without* the infant term
+(i.e. fitting only the baseline-plus-cliff part of Eq. 1) found $\mu_1\approx0$ and a mediocre fit
+(RMS log-residual $0.34$): with no term that's ever DEcreasing in age, that version of Eq. (1)
+structurally cannot represent the empirical curve's early-childhood dip (high at birth, lowest
+around age 5–14, then rising) — its best compromise just ignored that region. Adding the infant
+term (Eq. 1's first term) fixes this: refit jointly, RMS log-residual drops to $0.15$ (less than
+half), the childhood dip is now captured (visually near-exact from age $\sim$3 onward), and
+$\mu_1$ comes back to a real, nonzero value ($5.7\times10^{-4}$) since the baseline term is no
+longer needed to (badly) approximate the dip too.
 
 **Fertility** is fit in LINEAR space (minimizing $\sum_a(b_{0,\text{param}}(a)-b_{0,\text{emp}}(a))^2$),
 since $b_0$ includes true zeros where log-space is undefined.
 
 **Cross-validation**: running the fit defaults with `targetR0=[]` (completely unscaled, §5) gives
-$R_0\approx1.02$ — close to the empirical mode's own $R_0\approx1.06$ (§9), a good sign the fit
+$R_0\approx1.01$ — close to the empirical mode's own $R_0\approx1.06$ (§9), a good sign the fit
 captures the real data's overall reproduction level, not just its shape.
 
 ---
@@ -237,11 +243,13 @@ captures the real data's overall reproduction level, not just its shape.
 | $T$ | `nYears` | $500$ | simulation horizon |
 | — | `popInit` | $8\times10^9$ | total starting population |
 | — | — | — | initial age distribution: current real-world world age structure (CIA World Factbook, 2021-2023 estimates: 0-14 25.2%, 15-24 15.3%, 25-54 40.6%, 55-64 9.2%, 65+ 9.7%), not the model's own stable shape -- see Eq. (10) |
-| $\mu_0$ | `deathRateBase` | $0.0011$ | mortality hazard at age $0$ (fit, §10) |
-| $\mu_1$ | `deathRateSlope` | $0$ | added baseline hazard at age $A$ (fit to $\approx0$, §10) |
-| $f_s$ | `steepAgeFrac` | $0.144$ | age fraction of $A$ where the senescence cliff begins (fit, §10) |
-| $\mu_2$ | `steepMortalityScale` | $0.00053$ | extra-hazard scale past the cliff (fit, §10) |
-| $k$ | `steepMortalityRate` | $0.084$ | extra-hazard growth rate past the cliff (fit, §10) |
+| $\mu_i$ | `infantMortalityScale` | $0.0129$ | excess hazard at age $0$ from the infant-mortality term (fit, §10) |
+| $\tau_i$ | `infantMortalityDecay` | $1.21$ | its decay time constant, years (fit, §10) |
+| $\mu_0$ | `deathRateBase` | $0.00066$ | baseline hazard at age $0$, excluding the infant term (fit, §10) |
+| $\mu_1$ | `deathRateSlope` | $0.00057$ | added baseline hazard at age $A$ (fit, §10) |
+| $f_s$ | `steepAgeFrac` | $0.0734$ | age fraction of $A$ where the senescence cliff begins (fit, §10) |
+| $\mu_2$ | `steepMortalityScale` | $0.000227$ | extra-hazard scale past the cliff (fit, §10) |
+| $k$ | `steepMortalityRate` | $0.0836$ | extra-hazard growth rate past the cliff (fit, §10) |
 | $a_{\min}$ | `fertileMin` | $15.1$ | youngest fertile age (fit, §10) |
 | $a_{\max}$ | `fertileMax` | $42.4$ | oldest fertile age (fit, §10) |
 | $a^*$ | `fertilityPeakAge` | $27.0$ | age of peak fertility (fit, §10) |
