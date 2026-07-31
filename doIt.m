@@ -17,38 +17,26 @@ rateSource = 'parameterized';   % 'empirical' (current real-world age-specific r
                              % (hand-tuned Gompertz+cliff mortality, triangular fertility). Either
                              % way, whether fertility gets rescaled is controlled by targetR0 below,
                              % not by this choice. See README "Rate source" for details/sources.
-ageMax     = 150;      % y, oldest age class (plus-group: survivors accumulate here)
-steepAgeFrac        = 0.0734;   % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
-steepMortalityScale = 0.000227; % extra-hazard scale added past steepAgeFrac*ageMax
-steepMortalityRate  = 0.0836;   % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
-nYears     = 500;     % y, simulation horizon
-popInit    = 8e9;   % total starting population, distributed across ages per the real-world
-                       % 2021-2023 world age structure below (itself NOT the model's own stable age
-                       % distribution, so the model's convergence to its own shape over time is visible)
+% ageMax is the SIMULATION's oldest age class (plus-group); rateFit's ageRef/steepAge below are
+% fixed absolute ages, independent of it (an earlier version normalized them BY ageMax, so changing
+% ageMax to reduce plus-group truncation silently changed the fitted rates too -- fixed). ageMax can
+% now be set arbitrarily large without changing mortality(age)/fertility(age) at all -- only
+% ageMaxDisplay controls what the plots show.
+ageMax        = 1000;   % y, oldest age class (plus-group: survivors accumulate here)
+ageMaxDisplay = 90;      % y, x/y-axis limit for age in the plots ONLY; does not affect the simulation at all
+nYears        = 500;     % y, simulation horizon
+popInit       = 8e9;     % total starting population, distributed across ages per the real-world
+                          % 2021-2023 world age structure below (itself NOT the model's own stable age
+                          % distribution, so the model's convergence to its own shape over time is visible)
 
-% Mortality: per-capita annual death rate, AGE-DEPENDENT, rising with age (Gompertz-like), PLUS a
-% distinct infant-mortality term (elevated hazard at birth, decaying away over early childhood) --
-% neither the baseline nor the cliff term alone can represent that childhood dip (both are
-% monotonically non-decreasing in age). Defaults below are fit jointly (least squares in log-hazard
-% space, fminsearch) to the empirical mortality curve (rateSource='empirical', including its old-age
-% extrapolation) -- see populationModel.md Sec. 10.
-infantMortalityScale = 0.0129;   % excess hazard at age 0 from the infant-mortality term
-infantMortalityDecay = 1.21;     % y, its decay time constant (hazard ~ exp(-age/this), so ~gone within a few years)
-deathRateBase  = 0.00066;  % baseline hazard at age 0 (excluding the infant term)
-deathRateSlope = 0.00057;  % additional hazard at age ageMax (hazard = base + slope*(age/ageMax)^2)
-
-% Fertility: per-capita annual fertility rate, AGE-DEPENDENT, triangular over a fertile age window
-% (zero outside it, so births only come from ages in [fertileMin fertileMax]), peaking at
-% fertilityPeakRate. Defaults below are fit (fminsearch: pointwise squared error PLUS a penalty on
-% the R0 mismatch, weighted by this mode's own survivorship) to the empirical fertility curve
-% (rateSource='empirical') -- see populationModel.md Sec. 10. A pointwise-only fit matches the shape
-% well but still undershoots R0 by ~5% (empirical ~1.06 vs. ~1.01) -- half from real fertility just
-% outside a pointwise-fit window's hard edges, half from the smooth curve not preserving the real
-% curve's area even where both are nonzero; this fit corrects both by construction.
-fertileMin        = 12.1;    % y, youngest fertile age
-fertileMax        = 42.6;    % y, oldest fertile age
-fertilityPeakAge  = 27.0;    % y, age of peak fertility
-fertilityPeakRate = 0.0713;  % per-capita annual rate at fertilityPeakAge (unscaled shape's own peak height)
+% 'parameterized' mode's mortality/fertility rate constants, bundled into one struct (self-populating
+% defaults, like a no-arg opts function) rather than a dozen loose CONTROL PANEL variables: every
+% field here was fit jointly to the empirical curves as a cohesive set, not independently tuned, so
+% keeping them together avoids silently mixing values from different fits. See getFittedRateParams
+% below (or populationModel.md Sec. 10) for what each field means, its exact optimizer value, and how
+% it was derived. To explore off the fitted defaults, override individual fields after the call, e.g.
+% rateFit = getFittedRateParams(); rateFit.steepAge = 20;
+rateFit = getFittedRateParams();
 
 % Net reproduction rate (R0) target -- expected offspring per person over a lifetime, given the
 % mortality schedule above. If non-empty, fertility is rescaled to hit this target exactly, which
@@ -69,16 +57,15 @@ nAge   = numel(ageVec);
 %%% age-specific rates (both birth and death vary with age, not constant across the population)
 switch rateSource
 case 'parameterized'
-    mortality = infantMortalityScale * exp(-ageVec/infantMortalityDecay) + ...   % elevated hazard at birth, decaying over early childhood
-                deathRateBase + deathRateSlope * (ageVec/ageMax).^2;             % per-capita annual hazard, increases with age
-    steepAgeThreshold = steepAgeFrac * ageMax;
-    pastSteepAge = ageVec > steepAgeThreshold;
-    mortality(pastSteepAge) = mortality(pastSteepAge) + steepMortalityScale * (exp(steepMortalityRate*(ageVec(pastSteepAge)-steepAgeThreshold)) - 1);   % sharp senescence cliff past steepAgeFrac*ageMax
+    mortality = rateFit.infantMortalityScale * exp(-ageVec/rateFit.infantMortalityDecay) + ...   % elevated hazard at birth, decaying over early childhood
+                rateFit.deathRateBase + rateFit.deathRateSlope * (ageVec/rateFit.ageRef).^2;      % per-capita annual hazard, increases with age (ageRef fixed, NOT ageMax -- see CONTROL PANEL note)
+    pastSteepAge = ageVec > rateFit.steepAge;
+    mortality(pastSteepAge) = mortality(pastSteepAge) + rateFit.steepMortalityScale * (exp(rateFit.steepMortalityRate*(ageVec(pastSteepAge)-rateFit.steepAge)) - 1);   % sharp senescence cliff past steepAge
 
-    fertileAges = ageVec >= fertileMin & ageVec <= fertileMax;
+    fertileAges = ageVec >= rateFit.fertileMin & ageVec <= rateFit.fertileMax;
     fertilityShape = zeros(nAge,1);
-    halfWidth = max(fertilityPeakAge-fertileMin, fertileMax-fertilityPeakAge);
-    fertilityShape(fertileAges) = fertilityPeakRate * max(0, 1 - abs(ageVec(fertileAges)-fertilityPeakAge)/halfWidth);   % triangular, zero outside fertile window
+    halfWidth = max(rateFit.fertilityPeakAge-rateFit.fertileMin, rateFit.fertileMax-rateFit.fertilityPeakAge);
+    fertilityShape(fertileAges) = rateFit.fertilityPeakRate * max(0, 1 - abs(ageVec(fertileAges)-rateFit.fertilityPeakAge)/halfWidth);   % triangular, zero outside fertile window
 
 case 'empirical'
     % Real-world age-specific rates (World; Our World in Data, sourced from UN World Population
@@ -167,21 +154,22 @@ totalPop = sum(N,1);
 %% Plot results
 %%%%%%%%%%%%%%%%%%%
 years = 0:nYears;
-fig = figure('Position',[100 100 1000 800],'Color','k'); ht = tiledlayout(2,2); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
+fig = figure('Color','k'); ht = tiledlayout(2,2); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
 title(ht, sprintf('age-structured population model (%s rates, R0 = %.2f)', rateSource, R0), 'Color','w')
 
 nexttile
 plot(ageVec, mortality, 'r-', ageVec, fertility, 'g-', 'LineWidth', 1.5)
-set(gca,'YScale','log')   % log axis: mortality spans ~3 orders of magnitude from age 0 to ageMax
-                           % (including the extrapolated old-age tail beyond the data); a linear
-                           % axis can only show a small slice of that range at once. Ages/values
-                           % where fertility is exactly zero simply don't plot on a log axis (log(0)
-                           % is undefined) -- this only affects the DISPLAY, not the simulation,
-                           % which always uses the full mortality(age)/fertility(age) arrays below.
+set(gca,'YScale','log')   % log axis: mortality spans several orders of magnitude even just up
+                           % to ageMaxDisplay; a linear axis can only show a small slice of that range
+                           % at once. Ages/values where fertility is exactly zero simply don't plot on
+                           % a log axis (log(0) is undefined) -- this, and the xlim below, only affect
+                           % the DISPLAY, not the simulation, which always uses the full
+                           % mortality(age)/fertility(age) arrays (out to the real, large ageMax).
 xlabel('age'); ylabel('per-capita annual rate (log scale)')
 title('age-dependent rates')
 legend({'death rate','fertility rate'}, 'Location','best')
 grid on
+xlim([0 ageMaxDisplay])
 
 nexttile
 plot(years, totalPop, 'w-', 'LineWidth', 1.5)
@@ -198,6 +186,7 @@ xlabel('age'); ylabel('fraction of population')
 title('age distribution: initial vs. final')
 legend({'initial (world)','final (stable)'}, 'Location','best')
 grid on
+xlim([0 ageMaxDisplay])
 
 ax = nexttile;
 Nnorm = N ./ sum(N,1);   % normalize each year (column) to sum to 1 -- per-year age-distribution shape
@@ -206,6 +195,7 @@ xlabel('year'); ylabel('age')
 title('age-stratified population (normalized per year)')
 colorbar
 colormap gray
+ylim([0 ageMaxDisplay])
 %% %%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%
@@ -216,3 +206,35 @@ if ~exist(figDir,'dir'); mkdir(figDir); end
 arrayfun(@(a) axtoolbar(a,'Visible','off'), findall(gcf,'Type','axes'));   % suppress the axes toolbar icon from the export
 exportgraphics(gcf, fullfile(figDir,'populationModel.png'), 'Resolution',300)
 %% %%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%% Function definitions
+%%%%%%%%%%%%%%%%%%%%%%%
+function opts = getFittedRateParams()
+% getFittedRateParams  Default rateSource='parameterized' mortality/fertility rate constants.
+%   opts = getFittedRateParams() returns every 'parameterized'-mode mortality/fertility parameter,
+%   fully populated with its least-squares fit to the rateSource='empirical' curves (see
+%   populationModel.md Sec. 10 for the full derivation). Override individual fields on the
+%   returned struct to explore off the fitted defaults, e.g.
+%       rateFit = getFittedRateParams(); rateFit.steepAge = 20;
+%
+%   Mortality (Eq. 1): a 3-term hazard -- decaying infant-mortality excess, a slowly-rising
+%   baseline, and a senescence cliff past an absolute age -- fit jointly in log-hazard space via
+%   fminsearch. ageRef/steepAge are fixed absolute ages (NOT fractions of the simulation's own
+%   ageMax), so this fitted curve doesn't change if ageMax does.
+%   Fertility (Eq. 3): a triangular pulse, fit via pointwise squared error PLUS a penalty on the
+%   resulting net reproduction rate R0's mismatch from the empirical mode's own R0 -- a
+%   pointwise-only fit matches shape well but still undershoots R0 by ~5%.
+    opts.infantMortalityScale = 0.0129;   % excess hazard at age 0 from the infant-mortality term (optimizer: 0.0128711)
+    opts.infantMortalityDecay = 1.21;     % y, its decay time constant (hazard ~ exp(-age/this), so ~gone within a few years) (optimizer: 1.20517)
+    opts.deathRateBase        = 0.00066;  % baseline hazard at age 0, excluding the infant term (optimizer: 0.000659275)
+    opts.deathRateSlope       = 0.00057;  % additional hazard at age ageRef (hazard = base + slope*(age/ageRef)^2) (optimizer: 0.000572547)
+    opts.ageRef               = 150;      % y, fixed reference age deathRateSlope's term was fit against -- NOT ageMax
+    opts.steepAge             = 11.01;    % y, absolute age past which mortality accelerates sharply (senescence cliff) -- NOT a fraction of ageMax (optimizer: 0.0733907*150=11.0086)
+    opts.steepMortalityScale  = 0.000227; % extra-hazard scale added past steepAge (optimizer: 0.000226789)
+    opts.steepMortalityRate   = 0.0836;   % extra-hazard growth rate (per year) past steepAge; higher = sharper cliff (optimizer: 0.083606)
+    opts.fertileMin           = 12.1;     % y, youngest fertile age (optimizer: 12.0851)
+    opts.fertileMax           = 42.6;     % y, oldest fertile age (optimizer: 42.6161)
+    opts.fertilityPeakAge     = 27.0;     % y, age of peak fertility (optimizer: 27.0495)
+    opts.fertilityPeakRate    = 0.0713;   % per-capita annual rate at fertilityPeakAge, i.e. the unscaled shape's own peak height (optimizer: 0.07127)
+end

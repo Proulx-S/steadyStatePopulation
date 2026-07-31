@@ -15,10 +15,11 @@ see [`populationModel.md`](populationModel.md) for why that particular calibrati
 ![age-structured population model](figures/populationModel.png)
 
 - **top-left** — the age-dependent rates driving the model: mortality (red) and fertility (green)
-  by age, on a log axis (mortality alone spans ~4 orders of magnitude from age 0 to `ageMax`). Both
-  rate sources show the same real U-shaped mortality pattern (high at birth, a childhood minimum,
-  then rising) — the default parameterized curves are a smooth fit to it (populationModel.md §10);
-  switch to `rateSource='empirical'` to see the real, unsmoothed age-band data instead.
+  by age, on a log axis (mortality alone spans several orders of magnitude even just up to
+  `ageMaxDisplay`). Both rate sources show the same real U-shaped mortality pattern (high at birth,
+  a childhood minimum, then rising) — the default parameterized curves are a smooth fit to it
+  (populationModel.md §10); switch to `rateSource='empirical'` to see the real, unsmoothed age-band
+  data instead.
 - **top-right** — total population over time. Its *shape* settles quickly regardless; whether the
   *total* itself levels off depends on [`targetR0`](#net-reproduction-rate-r0) — it doesn't by
   default (`targetR0=[]`, mild growth at whatever R0 the rates actually imply), but does with
@@ -31,10 +32,22 @@ see [`populationModel.md`](populationModel.md) for why that particular calibrati
 ## Running it
 
 Everything lives in a single script, [`doIt.m`](doIt.m). Open it in MATLAB and run it — no data,
-no dependencies. All model parameters (age range, mortality/fertility shape, senescence cliff,
-simulation horizon, target net reproduction rate) sit together in one `CONTROL PANEL` block near
-the top; edit and re-run. The script ends by exporting the figure above to
-`figures/populationModel.png`.
+no dependencies. All model parameters sit together in one `CONTROL PANEL` block near the top; edit
+and re-run. The script ends by exporting the figure above to `figures/populationModel.png`.
+
+Two things in the `CONTROL PANEL` worth knowing:
+
+- **`ageMax` vs. `ageMaxDisplay`.** `ageMax` (large, 1000 by default) is how far the *simulation*
+  tracks age classes — kept large so the plus-group (§6 of `populationModel.md`) holds negligible
+  population, not to be looked at directly. `ageMaxDisplay` (90 by default) is a separate, purely
+  cosmetic axis limit for the plots. They used to be conflated (`ageMax` alone controlled both), and
+  the parameterized rate curves used to silently change shape with `ageMax` too (fixed — see
+  `populationModel.md` §1's note at the end).
+- **`rateFit = getFittedRateParams()`** bundles all 12 `'parameterized'`-mode mortality/fertility
+  constants into one struct, populated by a local function at the bottom of `doIt.m` (self-populating
+  defaults, same pattern as a no-arg opts function) — they're fit jointly as a set (§10), so this
+  keeps them from being tweaked individually out of sync with each other by accident. Override any
+  field after the call to explore off the fitted defaults, e.g. `rateFit.steepAge = 20;`.
 
 ## Rate source
 

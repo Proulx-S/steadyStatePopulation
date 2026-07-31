@@ -31,25 +31,31 @@ genuine steady state — the property the project is named for.
 `'empirical'` alternative -- the project's own default.)*
 
 Three terms: a decaying excess hazard at birth (infant mortality), a slowly-rising baseline
-(Gompertz-like ageing), and a sharp senescence cliff past a configurable fraction $f_s$
-(`steepAgeFrac`) of the maximum age:
+(Gompertz-like ageing), and a sharp senescence cliff past an absolute age $a_c$ (`steepAge`):
 
 $$
 \mu(a) = \underbrace{\mu_i\, e^{-a/\tau_i}}_{\text{infant mortality}} \;+\;
-\underbrace{\mu_0 + \mu_1\left(\frac{a}{A}\right)^2}_{\text{baseline ageing}} \;+\;
-\underbrace{\mathbb{1}[a > f_s A]\cdot \mu_2\Big(e^{\,k\,(a - f_s A)} - 1\Big)}_{\text{senescence cliff}}
+\underbrace{\mu_0 + \mu_1\left(\frac{a}{A_{\text{ref}}}\right)^2}_{\text{baseline ageing}} \;+\;
+\underbrace{\mathbb{1}[a > a_c]\cdot \mu_2\Big(e^{\,k\,(a - a_c)} - 1\Big)}_{\text{senescence cliff}}
 \tag{1}
 $$
 
 where $\mu_i=$ `infantMortalityScale`, $\tau_i=$ `infantMortalityDecay`, $\mu_0=$ `deathRateBase`,
-$\mu_1=$ `deathRateSlope`, $\mu_2=$ `steepMortalityScale`, $k=$ `steepMortalityRate`, and
-$\mathbb{1}[\cdot]$ is the indicator function. The infant term is what lets $\mu(a)$ have the real
-U-shape (high at birth, a childhood minimum, then rising) — neither of the other two terms is ever
-decreasing in $a$, so without it the model cannot represent that dip at all (§10). The cliff term is
-exactly zero at and before $a=f_s A$, then grows exponentially — with the current (fit, §10)
-defaults $f_s=0.0734$, $A=150$, it kicks in at age $11.0$ (right where the infant term has mostly
-decayed away) and drives $\mu(150)\approx25.3$ (survival $\approx1.1\times10^{-11}$/yr) by
-`ageMax`.
+$\mu_1=$ `deathRateSlope`, $A_{\text{ref}}=$ `ageRef`, $\mu_2=$ `steepMortalityScale`, $k=$
+`steepMortalityRate`, and $\mathbb{1}[\cdot]$ is the indicator function. The infant term is what
+lets $\mu(a)$ have the real U-shape (high at birth, a childhood minimum, then rising) — neither of
+the other two terms is ever decreasing in $a$, so without it the model cannot represent that dip at
+all (§10). The cliff term is exactly zero at and before $a=a_c$, then grows exponentially — with the
+current (fit, §10) defaults $a_c=11.01$ (right where the infant term has mostly decayed away) and
+$A_{\text{ref}}=150$, $\mu(90)\approx0.168$ (survival $\approx0.845$/yr).
+
+**$A_{\text{ref}}$ and $a_c$ are fixed constants, deliberately NOT tied to $A$ (`ageMax`)** — an
+earlier version of this formula normalized the baseline term by $A$ itself and set the cliff
+threshold as a *fraction* of $A$, so simply increasing `ageMax` (e.g. to shrink the plus-group's
+share of the population, §6) silently rescaled $\mu(a)$ at every age, for no physical reason (the
+fit was performed at one specific `ageMax`; deviating from it deviated the curve). Decoupling them
+means $\mu(a)$ — and hence $R_0$, `totalPop`, everything — no longer depends on `ageMax` at all;
+only `ageMaxDisplay` (plot axis limits, purely cosmetic) does.
 
 ## 2. Survival probability
 
@@ -160,7 +166,7 @@ $$
 This is a checkable prediction, not just an assertion: running `doIt.m` with
 `rateSource='parameterized'` and `targetR0` set to $1$ (its own default is empty, §5, so this needs
 setting explicitly -- giving $\lambda=1$ exactly), the simulated final-year age distribution
-`N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)` to within $8\times10^{-10}$ after
+`N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)` to within $2\times10^{-10}$ after
 `nYears`$=500$ years, starting from the real-world (not the model's own stable) age distribution in
 the parameter table below — confirming Eq. (10) numerically to near machine precision. (Eq. (10) is
 specifically the $\lambda=1$ case; with `rateSource='empirical'` or any other non-empty `targetR0`,
@@ -212,8 +218,9 @@ replacement.)
 The `'parameterized'` defaults (Eqs. 1, 3) are not arbitrary hand-picks — they're a least-squares
 fit of those SAME functional forms to the `'empirical'` mortality/fertility curves of §9 (including
 §9's own old-age Gompertz extrapolation beyond age 84), via `fminsearch` (Nelder–Mead, unconstrained
-— parameters reparametrized through `exp`/logistic transforms to keep $\mu_i,\tau_i,\mu_0,\mu_1,\mu_2,k>0$
-and $f_s\in(0,1)$).
+— parameters reparametrized through `exp`/logistic transforms to keep $\mu_i,\tau_i,\mu_0,\mu_1,\mu_2,k>0$;
+the cliff threshold was fit as a fraction of the fitting run's own `ageMax` then converted to the
+fixed absolute age $a_c$ used in Eq. (1) -- see the note at the end of §1 for why it's absolute now).
 
 **Mortality** is fit in LOG-hazard space (minimizing $\sum_a\big(\ln\mu_{\text{param}}(a)-\ln\mu_{\text{emp}}(a)\big)^2$)
 since $\mu$ spans several orders of magnitude with age. A first pass *without* the infant term
@@ -258,21 +265,23 @@ rather than just the fitting script.
 
 | symbol | code | default | meaning |
 |---|---|---|---|
-| $A$ | `ageMax` | $150$ | oldest age class (plus-group) |
+| $A$ | `ageMax` | $1000$ | oldest age class (plus-group). Deliberately large -- see the note at the end of §1 -- so the plus-group holds negligible population; independent of the curves below |
+| — | `ageMaxDisplay` | $90$ | age axis limit in the plots ONLY; purely cosmetic, no effect on the simulation |
 | $T$ | `nYears` | $500$ | simulation horizon |
 | — | `popInit` | $8\times10^9$ | total starting population |
 | — | — | — | initial age distribution: current real-world world age structure (CIA World Factbook, 2021-2023 estimates: 0-14 25.2%, 15-24 15.3%, 25-54 40.6%, 55-64 9.2%, 65+ 9.7%), not the model's own stable shape -- see Eq. (10) |
-| $\mu_i$ | `infantMortalityScale` | $0.0129$ | excess hazard at age $0$ from the infant-mortality term (fit, §10) |
-| $\tau_i$ | `infantMortalityDecay` | $1.21$ | its decay time constant, years (fit, §10) |
-| $\mu_0$ | `deathRateBase` | $0.00066$ | baseline hazard at age $0$, excluding the infant term (fit, §10) |
-| $\mu_1$ | `deathRateSlope` | $0.00057$ | added baseline hazard at age $A$ (fit, §10) |
-| $f_s$ | `steepAgeFrac` | $0.0734$ | age fraction of $A$ where the senescence cliff begins (fit, §10) |
-| $\mu_2$ | `steepMortalityScale` | $0.000227$ | extra-hazard scale past the cliff (fit, §10) |
-| $k$ | `steepMortalityRate` | $0.0836$ | extra-hazard growth rate past the cliff (fit, §10) |
-| $a_{\min}$ | `fertileMin` | $12.1$ | youngest fertile age (fit incl. R0-matching, §10) |
-| $a_{\max}$ | `fertileMax` | $42.6$ | oldest fertile age (fit incl. R0-matching, §10) |
-| $a^*$ | `fertilityPeakAge` | $27.0$ | age of peak fertility (fit, §10) |
-| $b_{\max}$ | `fertilityPeakRate` | $0.0713$ | per-capita rate at $a^*$ (fit incl. R0-matching, §10) |
+| $\mu_i$ | `infantMortalityScale` | $0.0129$ | excess hazard at age $0$ from the infant-mortality term (fit, §10; optimizer: $0.0128711$) |
+| $\tau_i$ | `infantMortalityDecay` | $1.21$ | its decay time constant, years (fit, §10; optimizer: $1.20517$) |
+| $\mu_0$ | `deathRateBase` | $0.00066$ | baseline hazard at age $0$, excluding the infant term (fit, §10; optimizer: $0.000659275$) |
+| $\mu_1$ | `deathRateSlope` | $0.00057$ | added baseline hazard at age $A_{\text{ref}}$ (fit, §10; optimizer: $0.000572547$) |
+| $A_{\text{ref}}$ | `ageRef` | $150$ | fixed reference age for $\mu_1$'s term -- NOT `ageMax` (§1) |
+| $a_c$ | `steepAge` | $11.01$ | absolute age where the senescence cliff begins -- NOT a fraction of `ageMax` (§1; fit, §10; optimizer: $11.0086$) |
+| $\mu_2$ | `steepMortalityScale` | $0.000227$ | extra-hazard scale past the cliff (fit, §10; optimizer: $0.000226789$) |
+| $k$ | `steepMortalityRate` | $0.0836$ | extra-hazard growth rate past the cliff (fit, §10; optimizer: $0.083606$) |
+| $a_{\min}$ | `fertileMin` | $12.1$ | youngest fertile age (fit incl. R0-matching, §10; optimizer: $12.0851$) |
+| $a_{\max}$ | `fertileMax` | $42.6$ | oldest fertile age (fit incl. R0-matching, §10; optimizer: $42.6161$) |
+| $a^*$ | `fertilityPeakAge` | $27.0$ | age of peak fertility (fit, §10; optimizer: $27.0495$) |
+| $b_{\max}$ | `fertilityPeakRate` | $0.0713$ | per-capita rate at $a^*$ (fit incl. R0-matching, §10; optimizer: $0.07127$) |
 | $R_0^{\text{target}}$ | `targetR0` | empty (`[]`) | net reproduction rate target; empty = don't rescale, just estimate/report $R_0$ (§5); a number ($1=$steady, $>1=$growth, $<1=$decline) rescales fertility to hit it exactly |
 
 ---
