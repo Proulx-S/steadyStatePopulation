@@ -1,5 +1,5 @@
 clear all
-close all
+% close all
 
 %%%%%%%%%%%%%%%%%%%%%
 %% Set up environment
@@ -12,12 +12,12 @@ workDir = fileparts(mfilename('fullpath'));
 % Age-structured (Leslie-matrix) population model. Each yearly age class
 % ages up one bin per year, subject to age-specific mortality; births
 % enter age 0 in proportion to age-specific fertility. Edit and hit Run.
-ageMax     = 90;      % y, oldest age class (plus-group: survivors accumulate here)
+ageMax     = 150;      % y, oldest age class (plus-group: survivors accumulate here)
 steepAgeFrac        = 0.95;   % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
-steepMortalityScale = 0.05;   % extra-hazard scale added past steepAgeFrac*ageMax
+steepMortalityScale = 0.02;   % extra-hazard scale added past steepAgeFrac*ageMax
 steepMortalityRate  = 1;      % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
-nYears     = 1500;     % y, simulation horizon
-popInit    = 100000;   % total starting population, distributed uniformly across ages
+nYears     = 150;     % y, simulation horizon
+popInit    = 10000;   % total starting population, distributed uniformly across ages
                        % (deliberately NOT the stable age distribution, so its emergence over time is visible)
 
 % Mortality: per-capita annual death rate, AGE-DEPENDENT, rising with age (Gompertz-like).
@@ -35,7 +35,7 @@ fertilityPeakAge = 28;    % y, age of peak fertility
 % to hit this target, which is what makes the population's LONG-RUN total
 % steady rather than exponentially growing/shrinking. R0=1 -> steady
 % state; R0>1 -> long-run growth; R0<1 -> long-run decline.
-targetR0 = 1.1;
+targetR0 = 1.0;
 %% =================================================
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -90,6 +90,11 @@ xlabel('age'); ylabel('per-capita annual rate')
 title('age-dependent rates')
 legend({'death rate','fertility rate'}, 'Location','best')
 grid on; axis square
+mortalityCapNoCliff = deathRateBase + deathRateSlope * (ageMax/ageMax)^2;   % baseline mortality at ageMax with steepMortalityScale=0 (no cliff); caps the axis so an active cliff spike doesn't squish the rest of the plot
+yl = ylim;
+if yl(2) > mortalityCapNoCliff
+    ylim([yl(1) mortalityCapNoCliff])
+end
 
 nexttile
 plot(years, totalPop, 'w-', 'LineWidth', 1.5)
@@ -103,6 +108,7 @@ imagesc(ageVec, years, Nnorm.'); set(gca,'YDir','normal')
 xlabel('age'); ylabel('year')
 title('age-stratified population (normalized per year)')
 colorbar
+colormap gray
 axis square
 
 nexttile
