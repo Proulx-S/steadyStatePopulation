@@ -12,6 +12,11 @@ workDir = fileparts(mfilename('fullpath'));
 % Age-structured (Leslie-matrix) population model. Each yearly age class
 % ages up one bin per year, subject to age-specific mortality; births
 % enter age 0 in proportion to age-specific fertility. Edit and hit Run.
+rateSource = 'parameterized';   % 'parameterized' (hand-tuned Gompertz+cliff mortality, triangular
+                                 % fertility, rescaled to targetR0) | 'empirical' (current real-world
+                                 % age-specific rates -- World, UN World Population Prospects via Our
+                                 % World in Data; NOT rescaled to targetR0, so its own R0 emerges from
+                                 % the real data as-is). See README "Rate source" for details/sources.
 ageMax     = 150;      % y, oldest age class (plus-group: survivors accumulate here)
 steepAgeFrac        = 0.95;   % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
 steepMortalityScale = 0.02;   % extra-hazard scale added past steepAgeFrac*ageMax
@@ -47,22 +52,69 @@ ageVec = (0:ageMax)';
 nAge   = numel(ageVec);
 
 %%% age-specific rates (both birth and death vary with age, not constant across the population)
-mortality = deathRateBase + deathRateSlope * (ageVec/ageMax).^2;   % per-capita annual hazard, increases with age
-steepAgeThreshold = steepAgeFrac * ageMax;
-pastSteepAge = ageVec > steepAgeThreshold;
-mortality(pastSteepAge) = mortality(pastSteepAge) + steepMortalityScale * (exp(steepMortalityRate*(ageVec(pastSteepAge)-steepAgeThreshold)) - 1);   % sharp senescence cliff past steepAgeFrac*ageMax
-survival  = exp(-mortality);                                       % per-capita annual survival probability
+switch rateSource
+case 'parameterized'
+    mortality = deathRateBase + deathRateSlope * (ageVec/ageMax).^2;   % per-capita annual hazard, increases with age
+    steepAgeThreshold = steepAgeFrac * ageMax;
+    pastSteepAge = ageVec > steepAgeThreshold;
+    mortality(pastSteepAge) = mortality(pastSteepAge) + steepMortalityScale * (exp(steepMortalityRate*(ageVec(pastSteepAge)-steepAgeThreshold)) - 1);   % sharp senescence cliff past steepAgeFrac*ageMax
 
-fertileAges = ageVec >= fertileMin & ageVec <= fertileMax;
-fertilityShape = zeros(nAge,1);
-halfWidth = max(fertilityPeakAge-fertileMin, fertileMax-fertilityPeakAge);
-fertilityShape(fertileAges) = max(0, 1 - abs(ageVec(fertileAges)-fertilityPeakAge)/halfWidth);   % triangular, zero outside fertile window
+    fertileAges = ageVec >= fertileMin & ageVec <= fertileMax;
+    fertilityShape = zeros(nAge,1);
+    halfWidth = max(fertilityPeakAge-fertileMin, fertileMax-fertilityPeakAge);
+    fertilityShape(fertileAges) = max(0, 1 - abs(ageVec(fertileAges)-fertilityPeakAge)/halfWidth);   % triangular, zero outside fertile window
 
-% scale fertility so the net reproduction rate matches targetR0: R0 = sum
-% over ages of (probability of surviving birth-to-age) x (fertility at age).
+    mortalityCapRef = deathRateBase + deathRateSlope * (ageMax/ageMax)^2;   % baseline mortality at ageMax with steepMortalityScale=0 (no cliff); caps the rates-plot axis
+
+case 'empirical'
+    % Real-world age-specific rates (World; Our World in Data, sourced from UN World Population
+    % Prospects). Fertility: 2023 age-specific fertility rate by 5-year age band (births per 1000
+    % women per year). Mortality: 2021 life-table probability of dying within each age band. Both
+    % converted below to this model's per-capita ANNUAL rate convention (mortality as a hazard,
+    % with survival = exp(-mortality); fertility as a per-capita, not per-woman, rate).
+    fertAgeBins = [10 14; 15 19; 20 24; 25 29; 30 34; 35 39; 40 44; 45 49; 50 54];   % y, [lo hi] inclusive; zero outside
+    fertAsfr    = [1.053 39.005 115.997 127.830 93.972 51.179 17.612 3.187 0.194];   % births per 1000 women per year
+    femaleFrac  = 0.5;                                                              % share of each age cohort assumed female (unisex model; see populationModel.md assumption 2)
+
+    mortAgeBins = [0 0; 1 4; 5 9; 10 14; 15 19; 20 24; 25 29; 30 34; 35 39; 40 44; 45 49; 50 54; 55 59; 60 64; 65 69; 70 74; 75 79; 80 84];
+    mortQx      = [0.028159427 0.009127571 0.003440582 0.002693729 0.004317795 0.005813476 0.006770404 0.008635458 0.01193883 0.017490493 0.024098558 0.03552827 0.05312812 0.07979178 0.11539516 0.17025621 0.2427777 0.3592315];   % P(die within band | alive at band start)
+
+    fertilityShape = zeros(nAge,1);
+    for b = 1:size(fertAgeBins,1)
+        inBin = ageVec >= fertAgeBins(b,1) & ageVec <= fertAgeBins(b,2);
+        fertilityShape(inBin) = (fertAsfr(b)/1000) * femaleFrac;   % per-capita annual rate
+    end
+
+    mortality = nan(nAge,1);
+    for b = 1:size(mortAgeBins,1)
+        inBin = ageVec >= mortAgeBins(b,1) & ageVec <= mortAgeBins(b,2);
+        bandWidth = mortAgeBins(b,2) - mortAgeBins(b,1) + 1;
+        mortality(inBin) = -log(1 - mortQx(b)) / bandWidth;   % per-capita annual hazard from the band's death probability
+    end
+    % extrapolate past the data's oldest covered age (84) with a Gompertz (log-linear) fit to the
+    % last 5 empirical bands, rather than leaving mortality undefined out to ageMax
+    lastCovered = mortAgeBins(end,2);
+    fitAges = mean(mortAgeBins(end-4:end,:),2);
+    fitHaz  = -log(1 - mortQx(end-4:end)') ./ (mortAgeBins(end-4:end,2)-mortAgeBins(end-4:end,1)+1);
+    p = polyfit(fitAges, log(fitHaz), 1);
+    beyondData = ageVec > lastCovered;
+    mortality(beyondData) = exp(polyval(p, ageVec(beyondData)));
+
+    mortalityCapRef = mortality(ageVec==lastCovered);   % cap the rates-plot axis at the last directly-observed (non-extrapolated) hazard
+end
+survival = exp(-mortality);   % per-capita annual survival probability
+
+% net reproduction rate (R0) this run actually has: sum over ages of (probability of surviving
+% birth-to-age) x (fertility at age). In 'parameterized' mode fertility is rescaled so this hits
+% targetR0 exactly; in 'empirical' mode it's left as the real data implies (see rateSource above).
 survivorship = cumprod([1; survival(1:end-1)]);   % l(age) = P(alive at age | born)
-R0_unscaled  = sum(survivorship .* fertilityShape);
-fertility    = fertilityShape * (targetR0 / R0_unscaled);   % age-dependent fertility rate
+if strcmp(rateSource,'parameterized')
+    R0_unscaled = sum(survivorship .* fertilityShape);
+    fertility   = fertilityShape * (targetR0 / R0_unscaled);   % age-dependent fertility rate, rescaled to targetR0
+else
+    fertility = fertilityShape;   % real-world fertility rate, used as-is (not rescaled)
+end
+R0 = sum(survivorship .* fertility);   % actual net reproduction rate this run ends up with
 
 %%% initial age distribution: current real-world world age structure (CIA World Factbook,
 %%% 2021-2023 estimates -- 0-14: 25.2%, 15-24: 15.3%, 25-54: 40.6%, 55-64: 9.2%, 65+: 9.7%),
@@ -102,7 +154,7 @@ totalPop = sum(N,1);
 %%%%%%%%%%%%%%%%%%%
 years = 0:nYears;
 fig = figure('Position',[100 100 1000 800],'Color','k'); ht = tiledlayout(2,2); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
-title(ht, sprintf('age-structured population model (R0 target = %.2f)', targetR0), 'Color','w')
+title(ht, sprintf('age-structured population model (%s rates, R0 = %.2f)', rateSource, R0), 'Color','w')
 
 nexttile
 plot(ageVec, mortality, 'r-', ageVec, fertility, 'g-', 'LineWidth', 1.5)
@@ -110,8 +162,7 @@ xlabel('age'); ylabel('per-capita annual rate')
 title('age-dependent rates')
 legend({'death rate','fertility rate'}, 'Location','best')
 grid on
-mortalityCapNoCliff = deathRateBase + deathRateSlope * (ageMax/ageMax)^2;   % baseline mortality at ageMax with steepMortalityScale=0 (no cliff); caps the axis so an active cliff spike doesn't squish the rest of the plot
-yl = ylim; yl(2) = max(max(fertility), mortalityCapNoCliff); ylim(yl);
+yl = ylim; yl(2) = max(max(fertility), mortalityCapRef); ylim(yl);
 
 nexttile
 plot(years, totalPop, 'w-', 'LineWidth', 1.5)

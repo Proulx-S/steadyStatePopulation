@@ -27,6 +27,9 @@ genuine steady state — the property the project is named for.
 
 ## 1. Age-dependent mortality
 
+*(This section, and §3 below, describe the default `rateSource='parameterized'` mode. §9 gives the
+`'empirical'` alternative.)*
+
 Baseline hazard rises with age (Gompertz-like), plus a sharp senescence cliff past a configurable
 fraction $f_s$ (`steepAgeFrac`) of the maximum age:
 
@@ -145,6 +148,45 @@ This is a checkable prediction, not just an assertion: running `doIt.m` with def
 simulated final-year age distribution `N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)`
 to within $2\times10^{-4}$ after `nYears`$=150$ years, starting from the real-world (not the
 model's own stable) age distribution in the parameter table below — confirming Eq. (10) numerically.
+
+---
+
+## 9. Empirical rate alternative
+
+`rateSource='empirical'` replaces Eqs. (1) and (3) with the current real-world age-specific rates
+for the World, rather than the hand-tuned shapes: fertility from the 2023 age-specific fertility
+rate by 5-year age band, mortality from the 2021 life table's probability of dying within each age
+band (both [Our World in Data](https://ourworldindata.org/), sourced from UN World Population
+Prospects; exact per-band values are in `doIt.m`'s `fertAsfr`/`mortQx`).
+
+**Mortality**, converting each band's probability of dying $q_{\text{band}}$ (given alive at the
+band's start) to this model's per-capita annual hazard, for a band of width $w$ years:
+
+$$
+\mu(a) = -\frac{\ln(1-q_{\text{band}(a)})}{w_{\text{band}(a)}} \tag{11}
+$$
+
+which is just Eq. (2) solved for $\mu$ given the band's own multi-year survival
+$(1-q_{\text{band}})=s(a)^w$. Past the data's oldest covered age (84), no life-table value exists,
+so $\mu(a)$ is extrapolated with a Gompertz (log-linear) fit to the last 5 empirical bands'
+hazards, continuing their trend out to `ageMax` rather than leaving it undefined.
+
+**Fertility**, converting the age-specific fertility rate $\text{ASFR}(a)$ (births per 1000 women
+per year) to this model's per-capita (not per-woman) rate, assuming a female population share
+$p_f=$ `femaleFrac` ($=0.5$):
+
+$$
+b(a) = \frac{\text{ASFR}(a)}{1000}\, p_f \tag{12}
+$$
+
+zero outside the reported age bands (10–54).
+
+**No R0 calibration in this mode.** Unlike §5–6, $b(a)$ from Eq. (12) is used directly — NOT
+rescaled to `targetR0` — so $R_0=\sum_a \ell(a)b(a)$ is whatever the real data implies, not a
+chosen target. This is deliberate: the point of this mode is to see what the world's *actual*
+current rates predict, not to force them into the steady-state condition of §8. (Currently
+$R_0\approx1.06$ — mild long-run growth, consistent with global fertility sitting slightly above
+replacement.)
 
 ---
 
