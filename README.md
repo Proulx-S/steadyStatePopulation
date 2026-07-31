@@ -3,14 +3,14 @@
 A minimal age-structured (Leslie-matrix / cohort-component) population model in MATLAB.
 Age-dependent birth (fertility) and death (mortality) rates drive a population of yearly age
 cohorts forward in time. By default (`rateSource='parameterized'`) those rates are smooth Gompertz
-(mortality) and triangular (fertility) curves — but not arbitrary ones: their shapes are fit by
-least squares to the world's actual current age-specific rates (see [Rate
+(mortality) and triangular (fertility) curves — but not arbitrary ones: they're fit to the world's
+actual current age-specific rates, shape AND net reproduction rate both (see [Rate
 source](#rate-source)/[populationModel.md](populationModel.md) §10), so they closely track reality
 while staying analytically simple. By default (`targetR0=[]`) they're also left unscaled, so the
-model reports whatever net reproduction rate that fit implies (currently R0 ≈ 1.01) rather than
-forcing one — set `targetR0=1` to instead calibrate fertility so the population settles into a
-genuine **steady state**, the property this project is named for; see
-[`populationModel.md`](populationModel.md) for why that particular calibration works.
+model reports whatever net reproduction rate that fit implies (currently R0 ≈ 1.06, matching the
+real data almost exactly) rather than forcing one — set `targetR0=1` to instead calibrate fertility
+so the population settles into a genuine **steady state**, the property this project is named for;
+see [`populationModel.md`](populationModel.md) for why that particular calibration works.
 
 ![age-structured population model](figures/populationModel.png)
 
@@ -47,9 +47,9 @@ to `targetR0` is a *separate*, independent choice — see [Net reproduction rate
 
 - **`'parameterized'`** (default) — smooth Gompertz-plus-senescence-cliff mortality (Eq. 1) and
   triangular fertility (Eq. 3) from [`populationModel.md`](populationModel.md). Its defaults aren't
-  arbitrary: they're least-squares fit to the `'empirical'` curves below (§10), so even fully
-  unscaled (`targetR0=[]`) they land close to the real net reproduction rate (R0 ≈ 1.01 vs. the
-  real ≈ 1.06).
+  arbitrary: they're a fit to the `'empirical'` curves below (§10) -- for fertility, shape AND net
+  reproduction rate both, not shape alone -- so even fully unscaled (`targetR0=[]`) they land at
+  essentially the real R0 (≈1.06).
 - **`'empirical'`** — the current real-world age-specific rates for the World: fertility from the
   2023 age-specific fertility rate by 5-year age band, and mortality from the 2021 life table's
   probability of dying within each age band (both from

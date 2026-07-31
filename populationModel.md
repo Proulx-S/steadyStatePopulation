@@ -226,12 +226,31 @@ half), the childhood dip is now captured (visually near-exact from age $\sim$3 o
 $\mu_1$ comes back to a real, nonzero value ($5.7\times10^{-4}$) since the baseline term is no
 longer needed to (badly) approximate the dip too.
 
-**Fertility** is fit in LINEAR space (minimizing $\sum_a(b_{0,\text{param}}(a)-b_{0,\text{emp}}(a))^2$),
-since $b_0$ includes true zeros where log-space is undefined.
+**Fertility** is fit in LINEAR space, minimizing pointwise squared error PLUS a penalty on the
+resulting $R_0$'s mismatch from the empirical mode's own $R_0$ (§9), weighted by *this* mode's own
+survivorship (Eq. 4) since that's what actually gets used once plugged into Eq. (5):
 
-**Cross-validation**: running the fit defaults with `targetR0=[]` (completely unscaled, §5) gives
-$R_0\approx1.01$ — close to the empirical mode's own $R_0\approx1.06$ (§9), a good sign the fit
-captures the real data's overall reproduction level, not just its shape.
+$$
+\sum_a\big(b_{0,\text{param}}(a)-b_{0,\text{emp}}(a)\big)^2 \;+\;
+\Lambda\Big(\textstyle\sum_a \ell_{\text{param}}(a)\,b_{0,\text{param}}(a) - R_0^{\text{emp}}\Big)^2
+$$
+
+with $\Lambda$ large enough ($10^5$) to make the second term dominate. A pointwise-only fit
+($\Lambda=0$) matches the empirical *shape* well (visually near-identical peak/width) but still
+landed at $R_0\approx1.01$ against the empirical $R_0\approx1.06$ — a $\sim$5% shortfall traced
+to two compounding effects, roughly half each: (i) the empirical curve has real, small fertility
+just outside a pointwise-fit window's edges (the 10–14 and 45+ age bands) that a hard triangular
+cutoff misses entirely regardless of how well it fits inside the window; (ii) even inside the
+window, minimizing pointwise error doesn't preserve the curve's *area* — the fit slightly overshoots
+near the peak and undershoots at the edges, and those don't cancel. Adding the $R_0$ penalty lets
+the optimizer trade a negligible amount of pointwise fit (SSE $0.00196$ vs. $0.00195$) for a wider
+window ($a_{\min}$ drops to $12.1$) that closes both gaps at once — by construction, since $R_0$
+matching is now directly in the objective, not a hoped-for side effect of shape matching.
+
+**Cross-validation**: running the fit defaults with `targetR0=[]` (completely unscaled, §5) now gives
+$R_0\approx1.06$, matching the empirical mode's own $R_0$ (§9) essentially exactly — by design, per
+the $R_0$-matching term above, but confirming it actually works when plugged into the full model
+rather than just the fitting script.
 
 ---
 
@@ -250,10 +269,10 @@ captures the real data's overall reproduction level, not just its shape.
 | $f_s$ | `steepAgeFrac` | $0.0734$ | age fraction of $A$ where the senescence cliff begins (fit, §10) |
 | $\mu_2$ | `steepMortalityScale` | $0.000227$ | extra-hazard scale past the cliff (fit, §10) |
 | $k$ | `steepMortalityRate` | $0.0836$ | extra-hazard growth rate past the cliff (fit, §10) |
-| $a_{\min}$ | `fertileMin` | $15.1$ | youngest fertile age (fit, §10) |
-| $a_{\max}$ | `fertileMax` | $42.4$ | oldest fertile age (fit, §10) |
+| $a_{\min}$ | `fertileMin` | $12.1$ | youngest fertile age (fit incl. R0-matching, §10) |
+| $a_{\max}$ | `fertileMax` | $42.6$ | oldest fertile age (fit incl. R0-matching, §10) |
 | $a^*$ | `fertilityPeakAge` | $27.0$ | age of peak fertility (fit, §10) |
-| $b_{\max}$ | `fertilityPeakRate` | $0.0709$ | per-capita rate at $a^*$ (fit, §10) |
+| $b_{\max}$ | `fertilityPeakRate` | $0.0713$ | per-capita rate at $a^*$ (fit incl. R0-matching, §10) |
 | $R_0^{\text{target}}$ | `targetR0` | empty (`[]`) | net reproduction rate target; empty = don't rescale, just estimate/report $R_0$ (§5); a number ($1=$steady, $>1=$growth, $<1=$decline) rescales fertility to hit it exactly |
 
 ---

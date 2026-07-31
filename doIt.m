@@ -39,12 +39,16 @@ deathRateSlope = 0.00057;  % additional hazard at age ageMax (hazard = base + sl
 
 % Fertility: per-capita annual fertility rate, AGE-DEPENDENT, triangular over a fertile age window
 % (zero outside it, so births only come from ages in [fertileMin fertileMax]), peaking at
-% fertilityPeakRate. Defaults below are fit (least squares, fminsearch) to the empirical fertility
-% curve (rateSource='empirical') -- see populationModel.md Sec. 10.
-fertileMin        = 15.1;    % y, youngest fertile age
-fertileMax        = 42.4;    % y, oldest fertile age
+% fertilityPeakRate. Defaults below are fit (fminsearch: pointwise squared error PLUS a penalty on
+% the R0 mismatch, weighted by this mode's own survivorship) to the empirical fertility curve
+% (rateSource='empirical') -- see populationModel.md Sec. 10. A pointwise-only fit matches the shape
+% well but still undershoots R0 by ~5% (empirical ~1.06 vs. ~1.01) -- half from real fertility just
+% outside a pointwise-fit window's hard edges, half from the smooth curve not preserving the real
+% curve's area even where both are nonzero; this fit corrects both by construction.
+fertileMin        = 12.1;    % y, youngest fertile age
+fertileMax        = 42.6;    % y, oldest fertile age
 fertilityPeakAge  = 27.0;    % y, age of peak fertility
-fertilityPeakRate = 0.0709;  % per-capita annual rate at fertilityPeakAge (unscaled shape's own peak height)
+fertilityPeakRate = 0.0713;  % per-capita annual rate at fertilityPeakAge (unscaled shape's own peak height)
 
 % Net reproduction rate (R0) target -- expected offspring per person over a lifetime, given the
 % mortality schedule above. If non-empty, fertility is rescaled to hit this target exactly, which
