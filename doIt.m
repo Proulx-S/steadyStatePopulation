@@ -24,7 +24,7 @@ popInit    = 10000;   % total starting population, distributed uniformly across 
 deathRateBase  = 0.004;   % baseline hazard at age 0
 deathRateSlope = 0.08;    % additional hazard at age ageMax (hazard = base + slope*(age/ageMax)^2)
 
-% Fertility: per-capita annual birth rate, AGE-DEPENDENT, triangular over a fertile age window
+% Fertility: per-capita annual fertility rate, AGE-DEPENDENT, triangular over a fertile age window
 % (zero outside it, so births only come from ages in [fertileMin fertileMax]).
 fertileMin       = 15;    % y, youngest fertile age
 fertileMax       = 45;    % y, oldest fertile age
@@ -61,7 +61,7 @@ fertilityShape(fertileAges) = max(0, 1 - abs(ageVec(fertileAges)-fertilityPeakAg
 % over ages of (probability of surviving birth-to-age) x (fertility at age).
 survivorship = cumprod([1; survival(1:end-1)]);   % l(age) = P(alive at age | born)
 R0_unscaled  = sum(survivorship .* fertilityShape);
-fertility    = fertilityShape * (targetR0 / R0_unscaled);   % age-dependent birth rate
+fertility    = fertilityShape * (targetR0 / R0_unscaled);   % age-dependent fertility rate
 
 %%% cohort simulation (Leslie matrix, applied step by step)
 N = zeros(nAge, nYears+1);
@@ -88,7 +88,7 @@ nexttile
 plot(ageVec, mortality, 'r-', ageVec, fertility, 'g-', 'LineWidth', 1.5)
 xlabel('age'); ylabel('per-capita annual rate')
 title('age-dependent rates')
-legend({'death rate','birth rate'}, 'Location','best')
+legend({'death rate','fertility rate'}, 'Location','best')
 grid on; axis square
 
 nexttile
