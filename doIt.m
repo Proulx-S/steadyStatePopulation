@@ -16,8 +16,8 @@ ageMax     = 90;      % y, oldest age class (plus-group: survivors accumulate he
 steepAgeFrac        = 0.95;   % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
 steepMortalityScale = 0.05;   % extra-hazard scale added past steepAgeFrac*ageMax
 steepMortalityRate  = 1;      % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
-nYears     = 150;     % y, simulation horizon
-popInit    = 10000;   % total starting population, distributed uniformly across ages
+nYears     = 1500;     % y, simulation horizon
+popInit    = 100000;   % total starting population, distributed uniformly across ages
                        % (deliberately NOT the stable age distribution, so its emergence over time is visible)
 
 % Mortality: per-capita annual death rate, AGE-DEPENDENT, rising with age (Gompertz-like).
@@ -35,7 +35,7 @@ fertilityPeakAge = 28;    % y, age of peak fertility
 % to hit this target, which is what makes the population's LONG-RUN total
 % steady rather than exponentially growing/shrinking. R0=1 -> steady
 % state; R0>1 -> long-run growth; R0<1 -> long-run decline.
-targetR0 = 1;
+targetR0 = 1.1;
 %% =================================================
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -107,9 +107,10 @@ legend({'initial (uniform)','final (stable)'}, 'Location','best')
 grid on; axis square
 
 ax = nexttile;
-imagesc(years, ageVec, N); set(gca,'YDir','normal')
-xlabel('year'); ylabel('age')
-title('age-stratified population')
+Nnorm = N ./ sum(N,1);   % normalize each year (column) to sum to 1 -- per-year age-distribution shape
+imagesc(ageVec, years, Nnorm.'); set(gca,'YDir','normal')
+xlabel('age'); ylabel('year')
+title('age-stratified population (normalized per year)')
 colorbar
 axis square
 %% %%%%%%%%%%%%%%%%%
