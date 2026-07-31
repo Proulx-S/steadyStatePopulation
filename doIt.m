@@ -81,7 +81,7 @@ totalPop = sum(N,1);
 %% Plot results
 %%%%%%%%%%%%%%%%%%%
 years = 0:nYears;
-figure; ht = tiledlayout(2,2); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
+figure('Position',[100 100 1000 800]); ht = tiledlayout(2,2); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
 title(ht, sprintf('age-structured population model (R0 target = %.2f)', targetR0))
 
 nexttile
@@ -89,7 +89,7 @@ plot(ageVec, mortality, 'r-', ageVec, fertility, 'g-', 'LineWidth', 1.5)
 xlabel('age'); ylabel('per-capita annual rate')
 title('age-dependent rates')
 legend({'death rate','fertility rate'}, 'Location','best')
-grid on; axis square
+grid on
 mortalityCapNoCliff = deathRateBase + deathRateSlope * (ageMax/ageMax)^2;   % baseline mortality at ageMax with steepMortalityScale=0 (no cliff); caps the axis so an active cliff spike doesn't squish the rest of the plot
 yl = ylim;
 if yl(2) > mortalityCapNoCliff
@@ -100,7 +100,7 @@ nexttile
 plot(years, totalPop, 'w-', 'LineWidth', 1.5)
 xlabel('year'); ylabel('total population')
 title('total population over time')
-grid on; axis square
+grid on
 
 ax = nexttile;
 Nnorm = N ./ sum(N,1);   % normalize each year (column) to sum to 1 -- per-year age-distribution shape
@@ -109,7 +109,6 @@ xlabel('age'); ylabel('year')
 title('age-stratified population (normalized per year)')
 colorbar
 colormap gray
-axis square
 
 nexttile
 hold on
@@ -118,5 +117,14 @@ plot(ageVec, N(:,end)/sum(N(:,end)), 'y-', 'LineWidth', 1.5)
 xlabel('age'); ylabel('fraction of population')
 title('age distribution: initial vs. final')
 legend({'initial (uniform)','final (stable)'}, 'Location','best')
-grid on; axis square
+grid on
 %% %%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%
+%% Export figure
+%%%%%%%%%%%%%%%%%
+figDir = fullfile(workDir,'figures');
+if ~exist(figDir,'dir'); mkdir(figDir); end
+arrayfun(@(a) axtoolbar(a,'Visible','off'), findall(gcf,'Type','axes'));   % suppress the axes toolbar icon from the export
+exportgraphics(gcf, fullfile(figDir,'populationModel.png'), 'Resolution',300)
+%% %%%%%%%%%%%%%%%
