@@ -143,8 +143,8 @@ $$
 
 This is a checkable prediction, not just an assertion: running `doIt.m` with defaults, the
 simulated final-year age distribution `N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)`
-to within $2\times10^{-5}$ after `nYears`$=150$ years from a uniform (i.e., far from stable) start
-— confirming Eq. (10) numerically.
+to within $2\times10^{-4}$ after `nYears`$=150$ years, starting from the real-world (not the
+model's own stable) age distribution in the parameter table below — confirming Eq. (10) numerically.
 
 ---
 
@@ -154,7 +154,8 @@ to within $2\times10^{-5}$ after `nYears`$=150$ years from a uniform (i.e., far 
 |---|---|---|---|
 | $A$ | `ageMax` | $90$ | oldest age class (plus-group) |
 | $T$ | `nYears` | $150$ | simulation horizon |
-| — | `popInit` | $10{,}000$ | total starting population (uniform across ages) |
+| — | `popInit` | $8\times10^9$ | total starting population |
+| — | — | — | initial age distribution: current real-world world age structure (CIA World Factbook, 2021-2023 estimates: 0-14 25.2%, 15-24 15.3%, 25-54 40.6%, 55-64 9.2%, 65+ 9.7%), not the model's own stable shape -- see Eq. (10) |
 | $\mu_0$ | `deathRateBase` | $0.004$ | mortality hazard at age $0$ |
 | $\mu_1$ | `deathRateSlope` | $0.08$ | added baseline hazard at age $A$ |
 | $f_s$ | `steepAgeFrac` | $0.95$ | age fraction of $A$ where the senescence cliff begins |

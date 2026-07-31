@@ -13,8 +13,8 @@ without bound — see [`populationModel.md`](populationModel.md) for why.
   the fertile age window).
 - **top-right** — total population over time, settling from its (deliberately non-stable) initial
   condition toward a steady long-run value.
-- **bottom-left** — the initial (uniform) vs. final (stable) age distribution, directly comparing
-  the starting and converged shapes.
+- **bottom-left** — the initial (current real-world) vs. final (model's own stable) age
+  distribution, directly comparing the starting and converged shapes.
 - **bottom-right** — the full age-stratified population, normalized within each year, showing the
   age distribution's shape converge over time.
 

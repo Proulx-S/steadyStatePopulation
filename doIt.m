@@ -17,12 +17,13 @@ steepAgeFrac        = 0.95;   % fraction of ageMax past which mortality accelera
 steepMortalityScale = 0.02;   % extra-hazard scale added past steepAgeFrac*ageMax
 steepMortalityRate  = 1;      % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
 nYears     = 150;     % y, simulation horizon
-popInit    = 10000;   % total starting population, distributed uniformly across ages
-                       % (deliberately NOT the stable age distribution, so its emergence over time is visible)
+popInit    = 8e9;   % total starting population, distributed across ages per the real-world
+                       % 2021-2023 world age structure below (itself NOT the model's own stable age
+                       % distribution, so the model's convergence to its own shape over time is visible)
 
 % Mortality: per-capita annual death rate, AGE-DEPENDENT, rising with age (Gompertz-like).
-deathRateBase  = 0.004;   % baseline hazard at age 0
-deathRateSlope = 0.08;    % additional hazard at age ageMax (hazard = base + slope*(age/ageMax)^2)
+deathRateBase  = 0.002;   % baseline hazard at age 0
+deathRateSlope = 0.01;    % additional hazard at age ageMax (hazard = base + slope*(age/ageMax)^2)
 
 % Fertility: per-capita annual fertility rate, AGE-DEPENDENT, triangular over a fertile age window
 % (zero outside it, so births only come from ages in [fertileMin fertileMax]).
@@ -63,9 +64,28 @@ survivorship = cumprod([1; survival(1:end-1)]);   % l(age) = P(alive at age | bo
 R0_unscaled  = sum(survivorship .* fertilityShape);
 fertility    = fertilityShape * (targetR0 / R0_unscaled);   % age-dependent fertility rate
 
+%%% initial age distribution: current real-world world age structure (CIA World Factbook,
+%%% 2021-2023 estimates -- 0-14: 25.2%, 15-24: 15.3%, 25-54: 40.6%, 55-64: 9.2%, 65+: 9.7%),
+%%% assigned uniformly across the years within each published bin. The open-ended 65+ bin has no
+%%% published within-bin breakdown, so its share is tapered across ages 65:ageMax by the model's OWN
+%%% survivorship curve (renormalized to that bin's real total) rather than spread flat all the way to
+%%% ageMax, which would be unrealistic.
+worldAgeBins  = [0 14; 15 24; 25 54; 55 64; 65 ageMax];   % y, [lo hi] inclusive
+worldAgeShare = [0.252 0.153 0.406 0.092 0.097];          % fraction of world population in each bin
+N0 = zeros(nAge,1);
+for b = 1:size(worldAgeBins,1)
+    inBin = ageVec >= worldAgeBins(b,1) & ageVec <= worldAgeBins(b,2);
+    if b < size(worldAgeBins,1)
+        N0(inBin) = worldAgeShare(b) / nnz(inBin);          % uniform within bin
+    else
+        w = survivorship(inBin); w = w / sum(w);            % taper the open-ended 65+ bin by the model's own survivorship shape
+        N0(inBin) = worldAgeShare(b) * w;
+    end
+end
+
 %%% cohort simulation (Leslie matrix, applied step by step)
 N = zeros(nAge, nYears+1);
-N(:,1) = popInit/nAge;   % uniform initial age distribution
+N(:,1) = popInit * N0;   % initial age distribution: real-world world age structure (see above), not uniform
 
 for t = 1:nYears
     survivors = N(1:end-1,t) .* survival(1:end-1);   % age up one year, age-dependent survival
@@ -91,10 +111,7 @@ title('age-dependent rates')
 legend({'death rate','fertility rate'}, 'Location','best')
 grid on
 mortalityCapNoCliff = deathRateBase + deathRateSlope * (ageMax/ageMax)^2;   % baseline mortality at ageMax with steepMortalityScale=0 (no cliff); caps the axis so an active cliff spike doesn't squish the rest of the plot
-yl = ylim;
-if yl(2) > mortalityCapNoCliff
-    ylim([yl(1) mortalityCapNoCliff])
-end
+yl = ylim; yl(2) = max(max(fertility), mortalityCapNoCliff); ylim(yl);
 
 nexttile
 plot(years, totalPop, 'w-', 'LineWidth', 1.5)
@@ -108,7 +125,7 @@ plot(ageVec, N(:,1)/sum(N(:,1)), 'c-', 'LineWidth', 1.5)
 plot(ageVec, N(:,end)/sum(N(:,end)), 'y-', 'LineWidth', 1.5)
 xlabel('age'); ylabel('fraction of population')
 title('age distribution: initial vs. final')
-legend({'initial (uniform)','final (stable)'}, 'Location','best')
+legend({'initial (world)','final (stable)'}, 'Location','best')
 grid on
 
 ax = nexttile;
