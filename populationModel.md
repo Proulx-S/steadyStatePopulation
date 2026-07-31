@@ -27,8 +27,8 @@ genuine steady state — the property the project is named for.
 
 ## 1. Age-dependent mortality
 
-*(This section, and §3 below, describe the default `rateSource='parameterized'` mode. §9 gives the
-`'empirical'` alternative.)*
+*(This section, and §3 below, describe the `rateSource='parameterized'` mode. §9 gives the
+`'empirical'` alternative -- the project's own default.)*
 
 Baseline hazard rises with age (Gompertz-like), plus a sharp senescence cliff past a configurable
 fraction $f_s$ (`steepAgeFrac`) of the maximum age:
@@ -144,16 +144,19 @@ $$
 \lim_{t\to\infty} \frac{N(a,t)}{P(t)} = \frac{\ell(a)}{\sum_{a'} \ell(a')} \tag{10}
 $$
 
-This is a checkable prediction, not just an assertion: running `doIt.m` with defaults, the
-simulated final-year age distribution `N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)`
-to within $2\times10^{-4}$ after `nYears`$=150$ years, starting from the real-world (not the
-model's own stable) age distribution in the parameter table below — confirming Eq. (10) numerically.
+This is a checkable prediction, not just an assertion: running `doIt.m` with
+`rateSource='parameterized'` ($\lambda=1$ exactly, since `targetR0=1`), the simulated final-year age
+distribution `N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)` to within
+$2\times10^{-4}$ after `nYears`$=150$ years, starting from the real-world (not the model's own
+stable) age distribution in the parameter table below — confirming Eq. (10) numerically. (Eq. (10)
+is specifically the $\lambda=1$ case; with `rateSource='empirical'` -- the project's own current
+default, §9 -- $\lambda\neq1$, so the general $\ell(a)\lambda^{-a}$ form above it applies instead.)
 
 ---
 
 ## 9. Empirical rate alternative
 
-`rateSource='empirical'` replaces Eqs. (1) and (3) with the current real-world age-specific rates
+`rateSource='empirical'` (the project's own default) replaces Eqs. (1) and (3) with the current real-world age-specific rates
 for the World, rather than the hand-tuned shapes: fertility from the 2023 age-specific fertility
 rate by 5-year age band, mortality from the 2021 life table's probability of dying within each age
 band (both [Our World in Data](https://ourworldindata.org/), sourced from UN World Population

@@ -12,11 +12,11 @@ workDir = fileparts(mfilename('fullpath'));
 % Age-structured (Leslie-matrix) population model. Each yearly age class
 % ages up one bin per year, subject to age-specific mortality; births
 % enter age 0 in proportion to age-specific fertility. Edit and hit Run.
-rateSource = 'parameterized';   % 'parameterized' (hand-tuned Gompertz+cliff mortality, triangular
-                                 % fertility, rescaled to targetR0) | 'empirical' (current real-world
-                                 % age-specific rates -- World, UN World Population Prospects via Our
-                                 % World in Data; NOT rescaled to targetR0, so its own R0 emerges from
-                                 % the real data as-is). See README "Rate source" for details/sources.
+rateSource = 'empirical';   % 'empirical' (current real-world age-specific rates -- World, UN
+                             % World Population Prospects via Our World in Data; NOT rescaled to
+                             % targetR0, so its own R0 emerges from the real data as-is) |
+                             % 'parameterized' (hand-tuned Gompertz+cliff mortality, triangular
+                             % fertility, rescaled to targetR0). See README "Rate source" for details/sources.
 ageMax     = 150;      % y, oldest age class (plus-group: survivors accumulate here)
 steepAgeFrac        = 0.95;   % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
 steepMortalityScale = 0.02;   % extra-hazard scale added past steepAgeFrac*ageMax
