@@ -13,6 +13,9 @@ workDir = fileparts(mfilename('fullpath'));
 % ages up one bin per year, subject to age-specific mortality; births
 % enter age 0 in proportion to age-specific fertility. Edit and hit Run.
 ageMax     = 90;      % y, oldest age class (plus-group: survivors accumulate here)
+steepAgeFrac        = 0.95;   % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
+steepMortalityScale = 0.05;   % extra-hazard scale added past steepAgeFrac*ageMax
+steepMortalityRate  = 1;      % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
 nYears     = 150;     % y, simulation horizon
 popInit    = 10000;   % total starting population, distributed uniformly across ages
                        % (deliberately NOT the stable age distribution, so its emergence over time is visible)
@@ -44,6 +47,9 @@ nAge   = numel(ageVec);
 
 %%% age-specific rates (both birth and death vary with age, not constant across the population)
 mortality = deathRateBase + deathRateSlope * (ageVec/ageMax).^2;   % per-capita annual hazard, increases with age
+steepAgeThreshold = steepAgeFrac * ageMax;
+pastSteepAge = ageVec > steepAgeThreshold;
+mortality(pastSteepAge) = mortality(pastSteepAge) + steepMortalityScale * (exp(steepMortalityRate*(ageVec(pastSteepAge)-steepAgeThreshold)) - 1);   % sharp senescence cliff past steepAgeFrac*ageMax
 survival  = exp(-mortality);                                       % per-capita annual survival probability
 
 fertileAges = ageVec >= fertileMin & ageVec <= fertileMax;
@@ -75,7 +81,7 @@ totalPop = sum(N,1);
 %% Plot results
 %%%%%%%%%%%%%%%%%%%
 years = 0:nYears;
-figure; ht = tiledlayout(1,4); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
+figure; ht = tiledlayout(2,2); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
 title(ht, sprintf('age-structured population model (R0 target = %.2f)', targetR0))
 
 nexttile
@@ -92,13 +98,6 @@ title('total population over time')
 grid on; axis square
 
 nexttile
-imagesc(years, ageVec, N); set(gca,'YDir','normal')
-xlabel('year'); ylabel('age')
-title('age-stratified population')
-colorbar
-axis square
-
-nexttile
 hold on
 plot(ageVec, N(:,1)/sum(N(:,1)), 'c-', 'LineWidth', 1.5)
 plot(ageVec, N(:,end)/sum(N(:,end)), 'y-', 'LineWidth', 1.5)
@@ -106,4 +105,11 @@ xlabel('age'); ylabel('fraction of population')
 title('age distribution: initial vs. final')
 legend({'initial (uniform)','final (stable)'}, 'Location','best')
 grid on; axis square
+
+ax = nexttile;
+imagesc(years, ageVec, N); set(gca,'YDir','normal')
+xlabel('year'); ylabel('age')
+title('age-stratified population')
+colorbar
+axis square
 %% %%%%%%%%%%%%%%%%%
