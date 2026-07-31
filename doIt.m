@@ -81,8 +81,8 @@ totalPop = sum(N,1);
 %% Plot results
 %%%%%%%%%%%%%%%%%%%
 years = 0:nYears;
-figure('Position',[100 100 1000 800]); ht = tiledlayout(2,2); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
-title(ht, sprintf('age-structured population model (R0 target = %.2f)', targetR0))
+fig = figure('Position',[100 100 1000 800],'Color','k'); ht = tiledlayout(2,2); ht.Padding = 'compact'; ht.TileSpacing = 'compact';
+title(ht, sprintf('age-structured population model (R0 target = %.2f)', targetR0), 'Color','w')
 
 nexttile
 plot(ageVec, mortality, 'r-', ageVec, fertility, 'g-', 'LineWidth', 1.5)
@@ -102,14 +102,6 @@ xlabel('year'); ylabel('total population')
 title('total population over time')
 grid on
 
-ax = nexttile;
-Nnorm = N ./ sum(N,1);   % normalize each year (column) to sum to 1 -- per-year age-distribution shape
-imagesc(ageVec, years, Nnorm.'); set(gca,'YDir','normal')
-xlabel('age'); ylabel('year')
-title('age-stratified population (normalized per year)')
-colorbar
-colormap gray
-
 nexttile
 hold on
 plot(ageVec, N(:,1)/sum(N(:,1)), 'c-', 'LineWidth', 1.5)
@@ -118,6 +110,14 @@ xlabel('age'); ylabel('fraction of population')
 title('age distribution: initial vs. final')
 legend({'initial (uniform)','final (stable)'}, 'Location','best')
 grid on
+
+ax = nexttile;
+Nnorm = N ./ sum(N,1);   % normalize each year (column) to sum to 1 -- per-year age-distribution shape
+imagesc(years, ageVec, Nnorm); set(gca,'YDir','normal')
+xlabel('year'); ylabel('age')
+title('age-stratified population (normalized per year)')
+colorbar
+colormap gray
 %% %%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%
