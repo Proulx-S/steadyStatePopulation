@@ -97,6 +97,14 @@ xlabel('year'); ylabel('total population')
 title('total population over time')
 grid on; axis square
 
+ax = nexttile;
+Nnorm = N ./ sum(N,1);   % normalize each year (column) to sum to 1 -- per-year age-distribution shape
+imagesc(ageVec, years, Nnorm.'); set(gca,'YDir','normal')
+xlabel('age'); ylabel('year')
+title('age-stratified population (normalized per year)')
+colorbar
+axis square
+
 nexttile
 hold on
 plot(ageVec, N(:,1)/sum(N(:,1)), 'c-', 'LineWidth', 1.5)
@@ -105,12 +113,4 @@ xlabel('age'); ylabel('fraction of population')
 title('age distribution: initial vs. final')
 legend({'initial (uniform)','final (stable)'}, 'Location','best')
 grid on; axis square
-
-ax = nexttile;
-Nnorm = N ./ sum(N,1);   % normalize each year (column) to sum to 1 -- per-year age-distribution shape
-imagesc(ageVec, years, Nnorm.'); set(gca,'YDir','normal')
-xlabel('age'); ylabel('year')
-title('age-stratified population (normalized per year)')
-colorbar
-axis square
 %% %%%%%%%%%%%%%%%%%
