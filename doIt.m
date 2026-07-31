@@ -118,6 +118,7 @@ plot(years, totalPop, 'w-', 'LineWidth', 1.5)
 xlabel('year'); ylabel('total population')
 title('total population over time')
 grid on
+yl = ylim; ylim([0 yl(2)])
 
 nexttile
 hold on
