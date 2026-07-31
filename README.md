@@ -26,6 +26,20 @@ simulation horizon, target net reproduction rate) sit together in one `CONTROL P
 the top; edit and re-run. The script ends by exporting the figure above to
 `figures/populationModel.png`.
 
+## Net reproduction rate (R0)
+
+R0 is the expected number of offspring a person has over their entire lifetime, given the model's
+mortality schedule — the standard demographic summary of whether a population is (more than)
+replacing itself. It's computed from the *unscaled* fertility shape (the triangular pulse in the
+top-left panel, before calibration) and the survivorship curve (the probability of surviving from
+birth to each age, itself derived from the mortality curve): `R0 = sum(survivorship .*
+fertilityShape)`. Fertility is then rescaled so this R0 hits `targetR0` (a `CONTROL PANEL`
+parameter in `doIt.m`, default `1`): `fertility = fertilityShape * (targetR0 / R0)`. This
+calibration is what the whole model hinges on — `targetR0 = 1` isn't just a plausible-looking
+number, it's the exact condition for a long-run steady population (`>1` grows, `<1` declines); see
+[`populationModel.md`](populationModel.md#8-why-r_01-gives-a-steady-state--the-eulerlotka-connection)
+for the Euler–Lotka argument why.
+
 ## Formalism
 
 [`populationModel.md`](populationModel.md) derives the model's equations in the order `doIt.m`
