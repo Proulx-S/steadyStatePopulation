@@ -12,36 +12,42 @@ workDir = fileparts(mfilename('fullpath'));
 % Age-structured (Leslie-matrix) population model. Each yearly age class
 % ages up one bin per year, subject to age-specific mortality; births
 % enter age 0 in proportion to age-specific fertility. Edit and hit Run.
-rateSource = 'empirical';   % 'empirical' (current real-world age-specific rates -- World, UN
-                             % World Population Prospects via Our World in Data; NOT rescaled to
-                             % targetR0, so its own R0 emerges from the real data as-is) |
-                             % 'parameterized' (hand-tuned Gompertz+cliff mortality, triangular
-                             % fertility, rescaled to targetR0). See README "Rate source" for details/sources.
+rateSource = 'parameterized';   % 'empirical' (current real-world age-specific rates -- World, UN
+                             % World Population Prospects via Our World in Data) | 'parameterized'
+                             % (hand-tuned Gompertz+cliff mortality, triangular fertility). Either
+                             % way, whether fertility gets rescaled is controlled by targetR0 below,
+                             % not by this choice. See README "Rate source" for details/sources.
 ageMax     = 150;      % y, oldest age class (plus-group: survivors accumulate here)
-steepAgeFrac        = 0.95;   % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
-steepMortalityScale = 0.02;   % extra-hazard scale added past steepAgeFrac*ageMax
-steepMortalityRate  = 1;      % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
-nYears     = 150;     % y, simulation horizon
+steepAgeFrac        = 0.144;    % fraction of ageMax past which mortality accelerates sharply (senescence cliff)
+steepMortalityScale = 0.00053;  % extra-hazard scale added past steepAgeFrac*ageMax
+steepMortalityRate  = 0.084;    % extra-hazard growth rate (per year) past steepAgeFrac*ageMax; higher = sharper cliff
+nYears     = 500;     % y, simulation horizon
 popInit    = 8e9;   % total starting population, distributed across ages per the real-world
                        % 2021-2023 world age structure below (itself NOT the model's own stable age
                        % distribution, so the model's convergence to its own shape over time is visible)
 
-% Mortality: per-capita annual death rate, AGE-DEPENDENT, rising with age (Gompertz-like).
-deathRateBase  = 0.002;   % baseline hazard at age 0
-deathRateSlope = 0.01;    % additional hazard at age ageMax (hazard = base + slope*(age/ageMax)^2)
+% Mortality: per-capita annual death rate, AGE-DEPENDENT, rising with age (Gompertz-like). Defaults
+% below are fit (least squares in log-hazard space, fminsearch) to the empirical mortality curve
+% (rateSource='empirical', including its old-age extrapolation) -- see populationModel.md Sec. 10.
+deathRateBase  = 0.0011;   % baseline hazard at age 0
+deathRateSlope = 0;        % additional hazard at age ageMax (hazard = base + slope*(age/ageMax)^2) -- fit to ~0: the empirical curve's rise is better captured by the cliff term alone (below) than a separate old-age-specific quadratic
 
 % Fertility: per-capita annual fertility rate, AGE-DEPENDENT, triangular over a fertile age window
-% (zero outside it, so births only come from ages in [fertileMin fertileMax]).
-fertileMin       = 15;    % y, youngest fertile age
-fertileMax       = 45;    % y, oldest fertile age
-fertilityPeakAge = 28;    % y, age of peak fertility
+% (zero outside it, so births only come from ages in [fertileMin fertileMax]), peaking at
+% fertilityPeakRate. Defaults below are fit (least squares, fminsearch) to the empirical fertility
+% curve (rateSource='empirical') -- see populationModel.md Sec. 10.
+fertileMin        = 15.1;    % y, youngest fertile age
+fertileMax        = 42.4;    % y, oldest fertile age
+fertilityPeakAge  = 27.0;    % y, age of peak fertility
+fertilityPeakRate = 0.0709;  % per-capita annual rate at fertilityPeakAge (unscaled shape's own peak height)
 
-% Net reproduction rate (R0) target -- expected offspring per person over
-% a lifetime, given the mortality schedule above. Fertility is auto-scaled
-% to hit this target, which is what makes the population's LONG-RUN total
-% steady rather than exponentially growing/shrinking. R0=1 -> steady
-% state; R0>1 -> long-run growth; R0<1 -> long-run decline.
-targetR0 = 1.0;
+% Net reproduction rate (R0) target -- expected offspring per person over a lifetime, given the
+% mortality schedule above. If non-empty, fertility is rescaled to hit this target exactly, which
+% is what makes the population's LONG-RUN total steady (targetR0=1) rather than growing/shrinking
+% (>1/<1) -- see populationModel.md for why. If EMPTY, fertility is left as fertilityShape gives it
+% (unscaled) and R0 is simply estimated/reported (in the figure title) instead of targeted --
+% pairs naturally with rateSource='empirical', to see what the real data's own rates imply.
+targetR0 = [];
 %% =================================================
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -62,9 +68,7 @@ case 'parameterized'
     fertileAges = ageVec >= fertileMin & ageVec <= fertileMax;
     fertilityShape = zeros(nAge,1);
     halfWidth = max(fertilityPeakAge-fertileMin, fertileMax-fertilityPeakAge);
-    fertilityShape(fertileAges) = max(0, 1 - abs(ageVec(fertileAges)-fertilityPeakAge)/halfWidth);   % triangular, zero outside fertile window
-
-    mortalityCapRef = deathRateBase + deathRateSlope * (ageMax/ageMax)^2;   % baseline mortality at ageMax with steepMortalityScale=0 (no cliff); caps the rates-plot axis
+    fertilityShape(fertileAges) = fertilityPeakRate * max(0, 1 - abs(ageVec(fertileAges)-fertilityPeakAge)/halfWidth);   % triangular, zero outside fertile window
 
 case 'empirical'
     % Real-world age-specific rates (World; Our World in Data, sourced from UN World Population
@@ -100,19 +104,19 @@ case 'empirical'
     beyondData = ageVec > lastCovered;
     mortality(beyondData) = exp(polyval(p, ageVec(beyondData)));
 
-    mortalityCapRef = mortality(ageVec==lastCovered);   % cap the rates-plot axis at the last directly-observed (non-extrapolated) hazard
 end
 survival = exp(-mortality);   % per-capita annual survival probability
 
 % net reproduction rate (R0) this run actually has: sum over ages of (probability of surviving
-% birth-to-age) x (fertility at age). In 'parameterized' mode fertility is rescaled so this hits
-% targetR0 exactly; in 'empirical' mode it's left as the real data implies (see rateSource above).
+% birth-to-age) x (fertility at age). If targetR0 is non-empty, fertility is rescaled so this hits
+% targetR0 exactly (works for either rateSource); if targetR0 is empty, fertility is used as-is and
+% R0 is simply estimated/reported, not targeted.
 survivorship = cumprod([1; survival(1:end-1)]);   % l(age) = P(alive at age | born)
-if strcmp(rateSource,'parameterized')
+if isempty(targetR0)
+    fertility = fertilityShape;   % don't rescale -- estimate/report R0 as the shape (or real data) implies
+else
     R0_unscaled = sum(survivorship .* fertilityShape);
     fertility   = fertilityShape * (targetR0 / R0_unscaled);   % age-dependent fertility rate, rescaled to targetR0
-else
-    fertility = fertilityShape;   % real-world fertility rate, used as-is (not rescaled)
 end
 R0 = sum(survivorship .* fertility);   % actual net reproduction rate this run ends up with
 
@@ -158,11 +162,16 @@ title(ht, sprintf('age-structured population model (%s rates, R0 = %.2f)', rateS
 
 nexttile
 plot(ageVec, mortality, 'r-', ageVec, fertility, 'g-', 'LineWidth', 1.5)
-xlabel('age'); ylabel('per-capita annual rate')
+set(gca,'YScale','log')   % log axis: mortality spans ~3 orders of magnitude from age 0 to ageMax
+                           % (including the extrapolated old-age tail beyond the data); a linear
+                           % axis can only show a small slice of that range at once. Ages/values
+                           % where fertility is exactly zero simply don't plot on a log axis (log(0)
+                           % is undefined) -- this only affects the DISPLAY, not the simulation,
+                           % which always uses the full mortality(age)/fertility(age) arrays below.
+xlabel('age'); ylabel('per-capita annual rate (log scale)')
 title('age-dependent rates')
 legend({'death rate','fertility rate'}, 'Location','best')
 grid on
-yl = ylim; yl(2) = max(max(fertility), mortalityCapRef); ylim(yl);
 
 nexttile
 plot(years, totalPop, 'w-', 'LineWidth', 1.5)

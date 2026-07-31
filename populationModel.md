@@ -41,9 +41,10 @@ $$
 
 where $\mu_0=$ `deathRateBase`, $\mu_1=$ `deathRateSlope`, $\mu_2=$ `steepMortalityScale`,
 $k=$ `steepMortalityRate`, and $\mathbb{1}[\cdot]$ is the indicator function. The cliff term is
-exactly zero at and before $a=f_s A$, then grows exponentially — with the default $f_s=0.95$,
-$A=90$, it kicks in at age $85.5$ and drives $\mu(90)\approx4.5$ (survival $\approx1\%$/yr) by
-`ageMax`.
+exactly zero at and before $a=f_s A$, then grows exponentially — with the current (fit, §10)
+defaults $f_s=0.144$, $A=150$, it kicks in at age $21.6$ and drives $\mu(150)\approx25.6$ (survival
+$\approx7\times10^{-12}$/yr) by `ageMax`. $\mu_1=0$ in the fit defaults: the cliff term alone
+captures the empirical curve's rise better than a separate baseline quadratic (§10).
 
 ## 2. Survival probability
 
@@ -57,12 +58,15 @@ $$
 ## 3. Age-dependent fertility
 
 Fertility is a triangular pulse over the fertile age window $[a_{\min},a_{\max}]$
-(`fertileMin`,`fertileMax`), peaking at $a^*$ (`fertilityPeakAge`), zero outside it — an
-unscaled *shape* $b_0(a)$ fixed before calibration (§5):
+(`fertileMin`,`fertileMax`), peaking at $a^*$ (`fertilityPeakAge`) with peak height $b_{\max}$
+(`fertilityPeakRate`), zero outside it — a *shape* $b_0(a)$ fixed before calibration (§5). Including
+$b_{\max}$ keeps $b_0(a)$ in real per-capita-rate units on its own, so it stays meaningful even with
+no calibration at all, i.e. `targetR0=[]` (§5) — an earlier version of this model normalized the
+peak to $1$ instead, meaningless without calibration:
 
 $$
 b_0(a) = \begin{cases}
-\max\!\left(0,\ 1 - \dfrac{|a-a^*|}{w}\right), & a_{\min}\le a\le a_{\max} \\[4pt]
+b_{\max}\cdot\max\!\left(0,\ 1 - \dfrac{|a-a^*|}{w}\right), & a_{\min}\le a\le a_{\max} \\[4pt]
 0, & \text{otherwise}
 \end{cases}
 \qquad w=\max(a^*-a_{\min},\ a_{\max}-a^*) \tag{3}
@@ -86,11 +90,15 @@ $$
 R_0 = \sum_{a=0}^{A} \ell(a)\, b_0(a) \tag{5}
 $$
 
-Fertility is then rescaled so $R_0$ hits a chosen target (`targetR0`, default $1$):
+If `targetR0` is non-empty, fertility is rescaled so $R_0$ hits that chosen target:
 
 $$
 b(a) = b_0(a)\cdot\frac{R_0^{\text{target}}}{R_0} \tag{6}
 $$
+
+If `targetR0` is empty (the project's own default), no rescaling happens at all: $b(a)=b_0(a)$, and
+$R_0$ from Eq. (5) is simply reported, not targeted -- meaningful now that $b_0(a)$ itself is
+already in real units (Eq. 3's $b_{\max}$).
 
 ## 6. Cohort update (Leslie-matrix recursion)
 
@@ -145,12 +153,13 @@ $$
 $$
 
 This is a checkable prediction, not just an assertion: running `doIt.m` with
-`rateSource='parameterized'` ($\lambda=1$ exactly, since `targetR0=1`), the simulated final-year age
-distribution `N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)` to within
-$2\times10^{-4}$ after `nYears`$=150$ years, starting from the real-world (not the model's own
-stable) age distribution in the parameter table below — confirming Eq. (10) numerically. (Eq. (10)
-is specifically the $\lambda=1$ case; with `rateSource='empirical'` -- the project's own current
-default, §9 -- $\lambda\neq1$, so the general $\ell(a)\lambda^{-a}$ form above it applies instead.)
+`rateSource='parameterized'` and `targetR0` set to $1$ (its own default is empty, §5, so this needs
+setting explicitly -- giving $\lambda=1$ exactly), the simulated final-year age distribution
+`N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)` to within $8\times10^{-10}$ after
+`nYears`$=500$ years, starting from the real-world (not the model's own stable) age distribution in
+the parameter table below — confirming Eq. (10) numerically to near machine precision. (Eq. (10) is
+specifically the $\lambda=1$ case; with `rateSource='empirical'` or any other non-empty `targetR0`,
+$\lambda\neq1$ in general, so the general $\ell(a)\lambda^{-a}$ form above it applies instead.)
 
 ---
 
@@ -193,23 +202,51 @@ replacement.)
 
 ---
 
+## 10. Fitting the parameterized shapes to empirical data
+
+The `'parameterized'` defaults (Eqs. 1, 3) are not arbitrary hand-picks — they're a least-squares
+fit of those SAME functional forms to the `'empirical'` mortality/fertility curves of §9 (including
+§9's own old-age Gompertz extrapolation beyond age 84), via `fminsearch` (Nelder–Mead, unconstrained
+— parameters reparametrized through `exp`/logistic transforms to keep $\mu_0,\mu_1,\mu_2,k>0$ and
+$f_s\in(0,1)$).
+
+**Mortality** is fit in LOG-hazard space (minimizing $\sum_a\big(\ln\mu_{\text{param}}(a)-\ln\mu_{\text{emp}}(a)\big)^2$)
+since $\mu$ spans several orders of magnitude with age. The fit found $\mu_1\approx0$: Eq. (1)'s
+baseline quadratic term contributes essentially nothing in the best fit — the senescence-cliff term
+alone, starting much younger ($f_sA\approx21.6$) than "late-life cliff" suggests, captures the
+empirical curve's overall rise better than baseline-plus-cliff can. This is an intrinsic limitation
+of Eq. (1), not a fitting failure: it has no mechanism for the empirical curve's early-childhood DIP
+(high at birth, lowest around age 5–14, then rising), since both of Eq. (1)'s terms are
+monotonically non-decreasing in age — the fit's residual concentrates there, not at the older ages
+that matter most for the model's long-run behavior.
+
+**Fertility** is fit in LINEAR space (minimizing $\sum_a(b_{0,\text{param}}(a)-b_{0,\text{emp}}(a))^2$),
+since $b_0$ includes true zeros where log-space is undefined.
+
+**Cross-validation**: running the fit defaults with `targetR0=[]` (completely unscaled, §5) gives
+$R_0\approx1.02$ — close to the empirical mode's own $R_0\approx1.06$ (§9), a good sign the fit
+captures the real data's overall reproduction level, not just its shape.
+
+---
+
 ## Parameter reference
 
 | symbol | code | default | meaning |
 |---|---|---|---|
-| $A$ | `ageMax` | $90$ | oldest age class (plus-group) |
-| $T$ | `nYears` | $150$ | simulation horizon |
+| $A$ | `ageMax` | $150$ | oldest age class (plus-group) |
+| $T$ | `nYears` | $500$ | simulation horizon |
 | — | `popInit` | $8\times10^9$ | total starting population |
 | — | — | — | initial age distribution: current real-world world age structure (CIA World Factbook, 2021-2023 estimates: 0-14 25.2%, 15-24 15.3%, 25-54 40.6%, 55-64 9.2%, 65+ 9.7%), not the model's own stable shape -- see Eq. (10) |
-| $\mu_0$ | `deathRateBase` | $0.004$ | mortality hazard at age $0$ |
-| $\mu_1$ | `deathRateSlope` | $0.08$ | added baseline hazard at age $A$ |
-| $f_s$ | `steepAgeFrac` | $0.95$ | age fraction of $A$ where the senescence cliff begins |
-| $\mu_2$ | `steepMortalityScale` | $0.05$ | extra-hazard scale past the cliff |
-| $k$ | `steepMortalityRate` | $1$ | extra-hazard growth rate past the cliff |
-| $a_{\min}$ | `fertileMin` | $15$ | youngest fertile age |
-| $a_{\max}$ | `fertileMax` | $45$ | oldest fertile age |
-| $a^*$ | `fertilityPeakAge` | $28$ | age of peak fertility |
-| $R_0^{\text{target}}$ | `targetR0` | $1$ | net reproduction rate target ($1=$steady, $>1=$growth, $<1=$decline) |
+| $\mu_0$ | `deathRateBase` | $0.0011$ | mortality hazard at age $0$ (fit, §10) |
+| $\mu_1$ | `deathRateSlope` | $0$ | added baseline hazard at age $A$ (fit to $\approx0$, §10) |
+| $f_s$ | `steepAgeFrac` | $0.144$ | age fraction of $A$ where the senescence cliff begins (fit, §10) |
+| $\mu_2$ | `steepMortalityScale` | $0.00053$ | extra-hazard scale past the cliff (fit, §10) |
+| $k$ | `steepMortalityRate` | $0.084$ | extra-hazard growth rate past the cliff (fit, §10) |
+| $a_{\min}$ | `fertileMin` | $15.1$ | youngest fertile age (fit, §10) |
+| $a_{\max}$ | `fertileMax` | $42.4$ | oldest fertile age (fit, §10) |
+| $a^*$ | `fertilityPeakAge` | $27.0$ | age of peak fertility (fit, §10) |
+| $b_{\max}$ | `fertilityPeakRate` | $0.0709$ | per-capita rate at $a^*$ (fit, §10) |
+| $R_0^{\text{target}}$ | `targetR0` | empty (`[]`) | net reproduction rate target; empty = don't rescale, just estimate/report $R_0$ (§5); a number ($1=$steady, $>1=$growth, $<1=$decline) rescales fertility to hit it exactly |
 
 ---
 
