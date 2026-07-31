@@ -54,15 +54,15 @@ $$
 ## 3. Age-dependent fertility
 
 Fertility is a triangular pulse over the fertile age window $[a_{\min},a_{\max}]$
-(`fertileMin`,`fertileMax`), peaking at $a^\*$ (`fertilityPeakAge`), zero outside it — an
+(`fertileMin`,`fertileMax`), peaking at $a^*$ (`fertilityPeakAge`), zero outside it — an
 unscaled *shape* $b_0(a)$ fixed before calibration (§5):
 
 $$
 b_0(a) = \begin{cases}
-\max\!\left(0,\ 1 - \dfrac{|a-a^\*|}{w}\right), & a_{\min}\le a\le a_{\max} \\[4pt]
+\max\!\left(0,\ 1 - \dfrac{|a-a^*|}{w}\right), & a_{\min}\le a\le a_{\max} \\[4pt]
 0, & \text{otherwise}
 \end{cases}
-\qquad w=\max(a^\*-a_{\min},\ a_{\max}-a^\*) \tag{3}
+\qquad w=\max(a^*-a_{\min},\ a_{\max}-a^*) \tag{3}
 $$
 
 ## 4. Survivorship
@@ -162,7 +162,7 @@ to within $2\times10^{-5}$ after `nYears`$=150$ years from a uniform (i.e., far 
 | $k$ | `steepMortalityRate` | $1$ | extra-hazard growth rate past the cliff |
 | $a_{\min}$ | `fertileMin` | $15$ | youngest fertile age |
 | $a_{\max}$ | `fertileMax` | $45$ | oldest fertile age |
-| $a^\*$ | `fertilityPeakAge` | $28$ | age of peak fertility |
+| $a^*$ | `fertilityPeakAge` | $28$ | age of peak fertility |
 | $R_0^{\text{target}}$ | `targetR0` | $1$ | net reproduction rate target ($1=$steady, $>1=$growth, $<1=$decline) |
 
 ---
