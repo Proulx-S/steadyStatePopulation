@@ -1,10 +1,12 @@
 # Age-structured population model — formalism
 
 `doIt.m` implements a discrete-time, age-structured (Leslie-matrix / cohort-component) population
-model: age-dependent birth and death rates drive a population of yearly age cohorts forward in
-time. This note derives the model's equations in the order `doIt.m` computes them, and works out
-*why* calibrating fertility to a target net reproduction rate makes the population settle into a
-genuine steady state — the property the project is named for.
+model (Leslie, 1945): age-dependent birth and death rates drive a population of yearly age cohorts
+forward in time. This note derives the model's equations in the order `doIt.m` computes them, works
+out *why* calibrating fertility to a target net reproduction rate makes the population settle into a
+genuine steady state — the property the project is named for — and compares each modelling choice
+against the standard demographic literature, flagging where a simplification here diverges from
+current practice (§11) and citing sources throughout (§References).
 
 ---
 
@@ -49,6 +51,23 @@ all (§10). The cliff term is exactly zero at and before $a=a_c$, then grows exp
 current (fit, §10) defaults $a_c=11.01$ (right where the infant term has mostly decayed away) and
 $A_{\text{ref}}=150$, $\mu(90)\approx0.168$ (survival $\approx0.845$/yr).
 
+**Relation to the literature.** The rising-with-age "Gompertz-like" middle+cliff behaviour is named
+for Gompertz's (1825) observation that adult human mortality rises close to exponentially with age
+— the oldest quantitative law in mortality modelling and still the basis of the senescent term in
+essentially every mortality model used today. Eq. (1)'s overall three-part shape (a term that falls
+with age, one that's roughly flat, one that rises) is the same competing-hazards idea behind two
+standard mortality laws: Siler's (1979) model,
+$h(a)=a_1e^{-a_2a}+a_3+a_4e^{a_5a}$ — a *falling* exponential (infancy) plus a true *constant*
+(background) plus a *rising, unthresholded* exponential from birth (senescence) — and
+Heligman & Pollard's (1980) eight-parameter law for human data specifically, which uses a power-law
+infant term, a distinct log-normal "accident hump" for young-adult mortality (elevated risk from
+injury/violence around ages 15–30, which Eq. (1) has no term for at all), and a logistic senescent
+term. Eq. (1) follows this same infant-plus-background-plus-senescent template but is **not** a
+literal instance of either: its "background" term is a slowly *rising* quadratic rather than Siler's
+true constant, and its senescent term is *thresholded* at $a_c$ and shifted (zero below $a_c$, not
+merely small) rather than Siler's or Heligman-Pollard's smooth, unthresholded rise from birth. §11
+discusses whether adopting one of these standard forms literally would be a better-grounded choice.
+
 **$A_{\text{ref}}$ and $a_c$ are fixed constants, deliberately NOT tied to $A$ (`ageMax`)** — an
 earlier version of this formula normalized the baseline term by $A$ itself and set the cliff
 threshold as a *fraction* of $A$, so simply increasing `ageMax` (e.g. to shrink the plus-group's
@@ -82,6 +101,20 @@ b_{\max}\cdot\max\!\left(0,\ 1 - \dfrac{|a-a^*|}{w}\right), & a_{\min}\le a\le a
 \end{cases}
 \qquad w=\max(a^*-a_{\min},\ a_{\max}-a^*) \tag{3}
 $$
+
+**Relation to the literature.** A piecewise-linear "tent" is not a standard demographic fertility
+model — real age-specific fertility schedules are smooth and (mildly) right-skewed: they rise faster
+from the youngest fertile ages than they fall off toward the oldest (confirmed directly in this
+model's own empirical data, §9: the rate climbs from age 15 to its 25–29 peak over ~10 years but
+takes until the early 50s, ~25 years, to fall back to zero). The standard alternatives are smooth,
+unimodal, right-skewed curves fit with as few as 2–4 parameters: Hadwiger's (1940) function (still
+widely used, close in spirit to a right-skewed bell curve), the empirical-natural-fertility-based
+Coale & Trussell (1974) model schedules, and Schmertmann's (2003) more recent spline-based system,
+designed specifically so its parameters ("graphically intuitive") map directly onto features like
+peak age and peak level — much like this model's own `fertilityPeakAge`/`fertilityPeakRate`. Eq. (3)
+trades that smoothness for a closed form simple enough to invert by hand (§10's fit only needs to
+find 4 numbers); §11 suggests the Hadwiger function specifically as a same-parameter-count, smoother
+alternative worth trying.
 
 ## 4. Survivorship
 
@@ -140,9 +173,15 @@ $$
 ## 8. Why $R_0=1$ gives a steady state — the Euler–Lotka connection
 
 The classical result linking a population's vital rates to its long-run behavior is the
-**Euler–Lotka equation**. In its discrete-age form it says the asymptotic growth multiplier
-$\lambda$ (population size scales as $\lambda^t$ once the age structure has settled down) is the
-positive root of
+**Euler–Lotka equation** — Euler derived a special case in 1760, in French, largely unnoticed by
+demographers until Keyfitz & Keyfitz's English translation (Euler, 1760/1970) brought it back into
+view; independently, Sharpe & Lotka (1911) derived the general continuous-age version that underlies
+modern stable population theory. In its discrete-age
+form (the natural fit here, since ages in this model are already whole-year classes, not a
+discretized approximation of the classical continuous-age integral) it says the asymptotic growth
+multiplier $\lambda$
+(population size scales as $\lambda^t$ once the age structure has settled down) is the positive
+root of
 
 $$
 1 = \sum_{a=0}^{A} \ell(a)\, b(a)\, \lambda^{-a} \tag{9}
@@ -176,11 +215,15 @@ $\lambda\neq1$ in general, so the general $\ell(a)\lambda^{-a}$ form above it ap
 
 ## 9. Empirical rate alternative
 
-`rateSource='empirical'` (the project's own default) replaces Eqs. (1) and (3) with the current real-world age-specific rates
-for the World, rather than the hand-tuned shapes: fertility from the 2023 age-specific fertility
-rate by 5-year age band, mortality from the 2021 life table's probability of dying within each age
-band (both [Our World in Data](https://ourworldindata.org/), sourced from UN World Population
-Prospects; exact per-band values are in `doIt.m`'s `fertAsfr`/`mortQx`).
+`rateSource='empirical'` (the project's own default) replaces Eqs. (1) and (3) with the current
+real-world age-specific rates for the World, rather than the hand-tuned shapes: fertility from the
+2023 age-specific fertility rate by 5-year age band (Our World in Data, 2026a, sourced from United
+Nations Population Division, 2024a), mortality from the 2021 life-table probability of dying within
+each age band (Our World in Data, 2026b, sourced from the World Health Organization's Global Health
+Observatory — **not** UN WPP; the two datasets have different original sources despite both being
+accessed through the same Our World in Data chart family, a distinction an earlier draft of this
+document got wrong). Exact per-band values are in `doIt.m`'s `fertAsfr`/`mortQx`; full citations in
+§References.
 
 **Mortality**, converting each band's probability of dying $q_{\text{band}}$ (given alive at the
 band's start) to this model's per-capita annual hazard, for a band of width $w$ years:
@@ -202,7 +245,12 @@ $$
 b(a) = \frac{\text{ASFR}(a)}{1000}\, p_f \tag{12}
 $$
 
-zero outside the reported age bands (10–54).
+zero outside the reported age bands (10–54). $p_f=0.5$ is itself a simplification of a real,
+age-varying quantity: about 105 boys are born for every 100 girls globally (United Nations
+Population Division, 2024b), i.e. female share $\approx0.488$ at birth, not $0.5$, and the female
+SHARE of each age cohort rises above 0.5 at older ages since male mortality is higher at nearly
+every age (assumption 2 already flags the model's lack of sex structure generally; this is the
+specific number that assumption trades away).
 
 **No R0 calibration in this mode.** Unlike §5–6, $b(a)$ from Eq. (12) is used directly — NOT
 rescaled to `targetR0` — so $R_0=\sum_a \ell(a)b(a)$ is whatever the real data implies, not a
@@ -261,15 +309,37 @@ rather than just the fitting script.
 
 ---
 
+## 11. Relation to the demographic literature; suggested refinements
+
+The core machinery — Leslie-matrix cohort projection (Leslie, 1945) and the Euler–Lotka steady-state
+condition (Euler, 1760/1970; Sharpe & Lotka, 1911) — is standard, unmodified demographic theory; §8's
+derivation is textbook stable-population theory, not a novel or simplified version of it. The
+simplifications worth flagging are all in the *inputs* to that machinery, not the machinery itself:
+
+| Where | This model | Standard practice | Suggested refinement |
+|---|---|---|---|
+| Mortality shape (Eq. 1, §1) | 3-term hazard, but with a *thresholded, shifted* senescent term and a *rising* (not constant) background term | Siler's (1979) or Heligman & Pollard's (1980) 3-/8-term hazards: smooth, unthresholded from birth; Heligman-Pollard adds a distinct young-adult "accident hump" | Refit Eq. (1) as a literal Siler model ($\mu_i e^{-a/\tau_i} + \mu_0 + \mu_2 e^{k a}$, no threshold) — same parameter count, standard form, removes the somewhat ad hoc cliff construction |
+| Fertility shape (Eq. 3, §3) | Piecewise-linear triangle, hard cutoffs, kinked peak | Smooth, right-skewed unimodal curves: Hadwiger (1940), Coale & Trussell (1974), Schmertmann (2003) | Swap in a Hadwiger function (same $\sim$4 parameters, smooth, standard, well-suited to a hand fit) |
+| Sex structure (assumption 2; Eq. 12, §9) | None — one population, $p_f=0.5$ fixed | Nearly all demographic models track males/females separately, since fertility is female-specific and mortality differs by sex at every age; real sex ratio at birth $\approx1.05$ boys/girl (United Nations Population Division, 2024b) | Split $N(a,t)$ into male/female vectors with their own mortality; only females contribute to Eq. (7c) |
+| No migration/density-dependence (assumption 3) | Rates fixed, independent of $t$ or $P(t)$ | Standard for a *closed*, deterministic stable-population exercise like this one (the same assumption Euler–Lotka itself requires, §8) — not a simplification relative to the classical theory, just a scope choice | None needed for this model's own stated purpose; would need revisiting only if migration or crowding effects become a modelling goal |
+| Initial age distribution | Current real-world structure (CIA World Factbook, 2021, via IndexMundi) | Same kind of source real demographic projections start from | None — this one already matches practice |
+
+None of these change the model's core conclusion (§8): Leslie-matrix projection plus the Euler–Lotka
+condition is exact, standard theory regardless of which mortality/fertility functional forms feed
+into it. The suggested refinements would make the *inputs* more standard and slightly more accurate
+(smoother fertility, a proper Siler-form mortality, sex structure) without touching that conclusion.
+
+---
+
 ## Parameter reference
 
 | symbol | code | default | meaning |
 |---|---|---|---|
 | $A$ | `ageMax` | $1000$ | oldest age class (plus-group). Deliberately large -- see the note at the end of §1 -- so the plus-group holds negligible population; independent of the curves below |
-| — | `ageMaxDisplay` | $90$ | age axis limit in the plots ONLY; purely cosmetic, no effect on the simulation |
+| — | `ageMaxDisplay` | $100$ | age axis limit in the plots ONLY; purely cosmetic, no effect on the simulation |
 | $T$ | `nYears` | $500$ | simulation horizon |
 | — | `popInit` | $8\times10^9$ | total starting population |
-| — | — | — | initial age distribution: current real-world world age structure (CIA World Factbook, 2021-2023 estimates: 0-14 25.2%, 15-24 15.3%, 25-54 40.6%, 55-64 9.2%, 65+ 9.7%), not the model's own stable shape -- see Eq. (10) |
+| — | — | — | initial age distribution: current real-world world age structure (Central Intelligence Agency, 2021, via IndexMundi: 0-14 25.2%, 15-24 15.3%, 25-54 40.6%, 55-64 9.2%, 65+ 9.7%), not the model's own stable shape -- see Eq. (10) |
 | $\mu_i$ | `infantMortalityScale` | $0.0129$ | excess hazard at age $0$ from the infant-mortality term (fit, §10; optimizer: $0.0128711$) |
 | $\tau_i$ | `infantMortalityDecay` | $1.21$ | its decay time constant, years (fit, §10; optimizer: $1.20517$) |
 | $\mu_0$ | `deathRateBase` | $0.00066$ | baseline hazard at age $0$, excluding the infant term (fit, §10; optimizer: $0.000659275$) |
@@ -291,10 +361,65 @@ rather than just the fitting script.
 1. **Yearly, discrete-age cohorts** — no within-year age or seasonality structure; birth/death
    probabilities are applied once per year (Eqs. 1–2, 7).
 2. **No sex structure** — $N(a,t)$ is a single (unisex) population; fertility $b(a)$ is a per-capita
-   rate applied to the whole cohort, not per-female.
+   rate applied to the whole cohort, not per-female; §9 and §11 discuss the specific numbers (sex
+   ratio at birth, differential mortality) this trades away, and how a real demographic model
+   usually handles it.
 3. **No migration, environmental stochasticity, or density dependence** — rates $\mu(a)$, $b(a)$ are
    fixed functions of age alone, independent of $t$ or $P(t)$; this is exactly what makes the
-   Euler–Lotka argument (§8) apply cleanly.
+   Euler–Lotka argument (§8) apply cleanly, and matches what that classical theory itself assumes
+   (§11) — not an extra simplification layered on top of it.
 4. **Plus-group at $A$** (Eq. 7b) — the oldest class is an absorbing bin, not a hard cutoff; nobody
    is assumed to die exactly at age $A$, though the senescence cliff (Eq. 1) makes survival past it
    very unlikely with default parameters.
+
+---
+
+## References
+
+Coale, A. J., & Trussell, T. J. (1974). Model fertility schedules: Variations in the age structure
+of childbearing in human populations. *Population Index*, 40(2), 185–258.
+https://doi.org/10.2307/2733910
+
+Euler, L. (1970). A general investigation into the mortality and multiplication of the human
+species (N. Keyfitz & B. Keyfitz, Trans.). *Theoretical Population Biology*, 1(3), 307–314.
+https://doi.org/10.1016/0040-5809(70)90048-1 (Original work published 1760)
+
+Gompertz, B. (1825). On the nature of the function expressive of the law of human mortality, and
+on a new mode of determining the value of life contingencies. *Philosophical Transactions of the
+Royal Society of London*, 115, 513–583. https://doi.org/10.1098/rstl.1825.0026
+
+Hadwiger, H. (1940). Eine analytische Reproduktionsfunktion für biologische Gesamtheiten.
+*Scandinavian Actuarial Journal*, 1940(3–4), 101–113.
+https://doi.org/10.1080/03461238.1940.10404802
+
+Heligman, L., & Pollard, J. H. (1980). The age pattern of mortality. *Journal of the Institute of
+Actuaries*, 107(1), 49–80. https://doi.org/10.1017/S0020268100040257
+
+Leslie, P. H. (1945). On the use of matrices in certain population mathematics. *Biometrika*,
+33(3), 183–212. https://doi.org/10.1093/biomet/33.3.183
+
+Schmertmann, C. P. (2003). A system of model fertility schedules with graphically intuitive
+parameters. *Demographic Research*, 9, 81–110. https://doi.org/10.4054/DemRes.2003.9.5
+
+Sharpe, F. R., & Lotka, A. J. (1911). A problem in age-distribution. *Philosophical Magazine*,
+21(124), 435–438. https://doi.org/10.1080/14786440408637050
+
+Siler, W. (1979). A competing-risk model for animal mortality. *Ecology*, 60(4), 750–757.
+https://doi.org/10.2307/1936612
+
+United Nations, Department of Economic and Social Affairs, Population Division. (2024a). *World
+Population Prospects 2024, Online Edition*. https://population.un.org/wpp/
+
+United Nations, Department of Economic and Social Affairs, Population Division. (2024b). Sex
+ratio at birth [Data set]. *World Population Prospects 2024* – processed by Our World in Data.
+https://ourworldindata.org/grapher/sex-ratio-at-birth
+
+Central Intelligence Agency. (2021). *The World Factbook: Age structure (World)*, via IndexMundi.
+https://www.indexmundi.com/world/age_structure.html
+
+Our World in Data. (2026a). Fertility rate by age group [Data set]. Sourced from United Nations,
+World Population Prospects (2024a). https://ourworldindata.org/grapher/fertility-rate-by-age-group
+
+Our World in Data. (2026b). Probability of dying by age [Data set]. Sourced from World Health
+Organization, Global Health Observatory.
+https://ourworldindata.org/grapher/probability-of-dying-by-age

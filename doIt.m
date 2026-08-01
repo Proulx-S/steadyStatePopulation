@@ -12,18 +12,20 @@ workDir = fileparts(mfilename('fullpath'));
 % Age-structured (Leslie-matrix) population model. Each yearly age class
 % ages up one bin per year, subject to age-specific mortality; births
 % enter age 0 in proportion to age-specific fertility. Edit and hit Run.
-rateSource = 'parameterized';   % 'empirical' (current real-world age-specific rates -- World, UN
-                             % World Population Prospects via Our World in Data) | 'parameterized'
-                             % (hand-tuned Gompertz+cliff mortality, triangular fertility). Either
-                             % way, whether fertility gets rescaled is controlled by targetR0 below,
-                             % not by this choice. See README "Rate source" for details/sources.
+rateSource = 'parameterized';   % 'empirical' (current real-world age-specific rates -- World;
+                             % fertility from UN World Population Prospects, mortality from WHO
+                             % Global Health Observatory, both via Our World in Data) |
+                             % 'parameterized' (hand-tuned Gompertz+cliff mortality, triangular
+                             % fertility). Either way, whether fertility gets rescaled is controlled
+                             % by targetR0 below, not by this choice. See README "Rate source" and
+                             % populationModel.md Sec. 9 for details/sources/citations.
 % ageMax is the SIMULATION's oldest age class (plus-group); rateFit's ageRef/steepAge below are
 % fixed absolute ages, independent of it (an earlier version normalized them BY ageMax, so changing
 % ageMax to reduce plus-group truncation silently changed the fitted rates too -- fixed). ageMax can
 % now be set arbitrarily large without changing mortality(age)/fertility(age) at all -- only
 % ageMaxDisplay controls what the plots show.
 ageMax        = 1000;   % y, oldest age class (plus-group: survivors accumulate here)
-ageMaxDisplay = 90;      % y, x/y-axis limit for age in the plots ONLY; does not affect the simulation at all
+ageMaxDisplay = 100;      % y, x/y-axis limit for age in the plots ONLY; does not affect the simulation at all
 nYears        = 500;     % y, simulation horizon
 popInit       = 8e9;     % total starting population, distributed across ages per the real-world
                           % 2021-2023 world age structure below (itself NOT the model's own stable age
@@ -68,11 +70,13 @@ case 'parameterized'
     fertilityShape(fertileAges) = rateFit.fertilityPeakRate * max(0, 1 - abs(ageVec(fertileAges)-rateFit.fertilityPeakAge)/halfWidth);   % triangular, zero outside fertile window
 
 case 'empirical'
-    % Real-world age-specific rates (World; Our World in Data, sourced from UN World Population
-    % Prospects). Fertility: 2023 age-specific fertility rate by 5-year age band (births per 1000
-    % women per year). Mortality: 2021 life-table probability of dying within each age band. Both
-    % converted below to this model's per-capita ANNUAL rate convention (mortality as a hazard,
-    % with survival = exp(-mortality); fertility as a per-capita, not per-woman, rate).
+    % Real-world age-specific rates (World; via Our World in Data). Fertility: 2023 age-specific
+    % fertility rate by 5-year age band (births per 1000 women per year), source: UN World
+    % Population Prospects (2024). Mortality: 2021 life-table probability of dying within each age
+    % band, source: WHO Global Health Observatory -- NOT UN WPP (corrected; see populationModel.md
+    % Sec. 9 for full citations). Both converted below to this model's per-capita ANNUAL rate
+    % convention (mortality as a hazard, with survival = exp(-mortality); fertility as a per-capita,
+    % not per-woman, rate).
     fertAgeBins = [10 14; 15 19; 20 24; 25 29; 30 34; 35 39; 40 44; 45 49; 50 54];   % y, [lo hi] inclusive; zero outside
     fertAsfr    = [1.053 39.005 115.997 127.830 93.972 51.179 17.612 3.187 0.194];   % births per 1000 women per year
     femaleFrac  = 0.5;                                                              % share of each age cohort assumed female (unisex model; see populationModel.md assumption 2)
