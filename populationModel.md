@@ -2,11 +2,16 @@
 
 `doIt.m` implements a discrete-time, age-structured (Leslie-matrix / cohort-component) population
 model (Leslie, 1945): age-dependent birth and death rates drive a population of yearly age cohorts
-forward in time. This note derives the model's equations in the order `doIt.m` computes them, works
-out *why* calibrating fertility to a target net reproduction rate makes the population settle into a
-genuine steady state — the property the project is named for — and compares each modelling choice
-against the standard demographic literature, flagging where a simplification here diverges from
-current practice (§11) and citing sources throughout (§References).
+forward in time. Three interchangeable sources supply those rates, selected by `rateSource`: two
+closed-form curve *families* fit to real data — **`'rough'`**, this project's own hand-built shapes
+(Eqs. 1, 3), and **`'conventional'`**, literal instances of two standard demographic laws, Siler's
+(1979) mortality model and Hadwiger's (1940) fertility function (Eqs. 1′, 3′) — plus **`'empirical'`**,
+the raw current real-world age-band data those curves are fit to (§9). All three plug into the same
+downstream machinery unchanged. This note derives the model's equations in the order `doIt.m`
+computes them, works out *why* calibrating fertility to a target net reproduction rate makes the
+population settle into a genuine steady state — the property the project is named for — and compares
+each modelling choice against the standard demographic literature, flagging where a simplification
+here diverges from current practice (§11) and citing sources throughout (§References).
 
 ---
 
@@ -29,8 +34,11 @@ current practice (§11) and citing sources throughout (§References).
 
 ## 1. Age-dependent mortality
 
-*(This section, and §3 below, describe the `rateSource='parameterized'` mode. §9 gives the
-`'empirical'` alternative -- the project's own default.)*
+*(This section, and §3 below, describe the `'rough'` and `'conventional'` `rateSource` modes -- two
+closed-form curve families, both fit to the same underlying real-world data. §9 gives the
+`'empirical'` alternative: the raw age-band data itself, unsmoothed.)*
+
+### 1a. Rough model (`mortalityRough`, `rateSource='rough'`)
 
 Three terms: a decaying excess hazard at birth (infant mortality), a slowly-rising baseline
 (Gompertz-like ageing), and a sharp senescence cliff past an absolute age $a_c$ (`steepAge`):
@@ -48,25 +56,22 @@ $\mu_1=$ `deathRateSlope`, $A_{\text{ref}}=$ `ageRef`, $\mu_2=$ `steepMortalityS
 lets $\mu(a)$ have the real U-shape (high at birth, a childhood minimum, then rising) — neither of
 the other two terms is ever decreasing in $a$, so without it the model cannot represent that dip at
 all (§10). The cliff term is exactly zero at and before $a=a_c$, then grows exponentially — with the
-current (fit, §10) defaults $a_c=11.01$ (right where the infant term has mostly decayed away) and
-$A_{\text{ref}}=150$, $\mu(90)\approx0.168$ (survival $\approx0.845$/yr).
+current (fit, §10) defaults $a_c=11.0$ (right where the infant term has mostly decayed away) and
+$A_{\text{ref}}=150$, $\mu(90)\approx0.163$ (survival $\approx0.850$/yr).
 
 **Relation to the literature.** The rising-with-age "Gompertz-like" middle+cliff behaviour is named
 for Gompertz's (1825) observation that adult human mortality rises close to exponentially with age
 — the oldest quantitative law in mortality modelling and still the basis of the senescent term in
 essentially every mortality model used today. Eq. (1)'s overall three-part shape (a term that falls
 with age, one that's roughly flat, one that rises) is the same competing-hazards idea behind two
-standard mortality laws: Siler's (1979) model,
-$h(a)=a_1e^{-a_2a}+a_3+a_4e^{a_5a}$ — a *falling* exponential (infancy) plus a true *constant*
-(background) plus a *rising, unthresholded* exponential from birth (senescence) — and
-Heligman & Pollard's (1980) eight-parameter law for human data specifically, which uses a power-law
-infant term, a distinct log-normal "accident hump" for young-adult mortality (elevated risk from
-injury/violence around ages 15–30, which Eq. (1) has no term for at all), and a logistic senescent
-term. Eq. (1) follows this same infant-plus-background-plus-senescent template but is **not** a
-literal instance of either: its "background" term is a slowly *rising* quadratic rather than Siler's
-true constant, and its senescent term is *thresholded* at $a_c$ and shifted (zero below $a_c$, not
-merely small) rather than Siler's or Heligman-Pollard's smooth, unthresholded rise from birth. §11
-discusses whether adopting one of these standard forms literally would be a better-grounded choice.
+standard mortality laws: Siler's (1979) model (Eq. 1′ below) and Heligman & Pollard's (1980)
+eight-parameter law for human data specifically, which uses a power-law infant term, a distinct
+log-normal "accident hump" for young-adult mortality (elevated risk from injury/violence around ages
+15–30, which neither Eq. 1 nor Eq. 1′ has a term for), and a logistic senescent term. Eq. (1) follows
+the infant-plus-background-plus-senescent template but is **not** a literal instance of Siler's law:
+its "background" term is a slowly *rising* quadratic rather than a true constant, and its senescent
+term is *thresholded* at $a_c$ and shifted (zero below $a_c$, not merely small) rather than smooth
+and unthresholded from birth.
 
 **$A_{\text{ref}}$ and $a_c$ are fixed constants, deliberately NOT tied to $A$ (`ageMax`)** — an
 earlier version of this formula normalized the baseline term by $A$ itself and set the cliff
@@ -75,6 +80,22 @@ share of the population, §6) silently rescaled $\mu(a)$ at every age, for no ph
 fit was performed at one specific `ageMax`; deviating from it deviated the curve). Decoupling them
 means $\mu(a)$ — and hence $R_0$, `totalPop`, everything — no longer depends on `ageMax` at all;
 only `ageMaxDisplay` (plot axis limits, purely cosmetic) does.
+
+### 1b. Conventional model (`mortalityConventional`, `rateSource='conventional'`)
+
+A literal instance of Siler's (1979) competing-hazards law — a *falling* exponential (infancy) plus
+a true *constant* (background) plus a *rising, unthresholded* exponential from birth (senescence):
+
+$$
+\mu(a) = a_1 e^{-a_2 a} \;+\; a_3 \;+\; a_4 e^{a_5 a} \tag{1$'$}
+$$
+
+where $a_1,\dots,a_5=$ `a1`,…,`a5` in the `mortalityConventional` params struct. Unlike Eq. (1), there
+is no threshold and no fixed reference age — the senescent term rises smoothly from birth at every
+age, it just stays negligible until age contributes enough to $a_4e^{a_5a}$ to matter. Fit to the same
+empirical curve as Eq. (1) (§10), it tracks the data about as well (RMS log-residual within a few
+percent of Eq. (1)'s own — §10) while being a direct, unmodified instance of a named, widely-used
+mortality law rather than an ad hoc variant of its shape.
 
 ## 2. Survival probability
 
@@ -86,6 +107,11 @@ s(a) = e^{-\mu(a)} \tag{2}
 $$
 
 ## 3. Age-dependent fertility
+
+*(As in §1: `'rough'` and `'conventional'` are two closed-form curve families fit to the same
+data; §9 gives the raw `'empirical'` age-band data itself.)*
+
+### 3a. Rough model (`fertilityRough`, `rateSource='rough'`)
 
 Fertility is a triangular pulse over the fertile age window $[a_{\min},a_{\max}]$
 (`fertileMin`,`fertileMax`), peaking at $a^*$ (`fertilityPeakAge`) with peak height $b_{\max}$
@@ -107,14 +133,34 @@ model — real age-specific fertility schedules are smooth and (mildly) right-sk
 from the youngest fertile ages than they fall off toward the oldest (confirmed directly in this
 model's own empirical data, §9: the rate climbs from age 15 to its 25–29 peak over ~10 years but
 takes until the early 50s, ~25 years, to fall back to zero). The standard alternatives are smooth,
-unimodal, right-skewed curves fit with as few as 2–4 parameters: Hadwiger's (1940) function (still
-widely used, close in spirit to a right-skewed bell curve), the empirical-natural-fertility-based
-Coale & Trussell (1974) model schedules, and Schmertmann's (2003) more recent spline-based system,
-designed specifically so its parameters ("graphically intuitive") map directly onto features like
-peak age and peak level — much like this model's own `fertilityPeakAge`/`fertilityPeakRate`. Eq. (3)
-trades that smoothness for a closed form simple enough to invert by hand (§10's fit only needs to
-find 4 numbers); §11 suggests the Hadwiger function specifically as a same-parameter-count, smoother
-alternative worth trying.
+unimodal, right-skewed curves fit with as few as 2–4 parameters: Hadwiger's (1940) function (Eq. 3′
+below), the empirical-natural-fertility-based Coale & Trussell (1974) model schedules, and
+Schmertmann's (2003) more recent spline-based system, designed specifically so its parameters
+("graphically intuitive") map directly onto features like peak age and peak level — much like this
+model's own `fertilityPeakAge`/`fertilityPeakRate`. Eq. (3) trades that smoothness for a closed form
+simple enough to invert by hand (§10's fit only needs to find 4 numbers).
+
+### 3b. Conventional model (`fertilityConventional`, `rateSource='conventional'`)
+
+A literal instance of Hadwiger's (1940) fertility function — smooth, unimodal, and (mildly)
+right-skewed, matching the real shape §3a's triangle only approximates:
+
+$$
+b_0(a) = \frac{\alpha\beta}{\gamma}\left(\frac{\gamma}{a}\right)^{1.5}
+\exp\!\left[-\beta^2\left(\frac{\gamma}{a}+\frac{a}{\gamma}-2\right)\right] \tag{3$'$}
+$$
+
+where $\alpha,\beta,\gamma=$ `a`,`b`,`c` in the `fertilityConventional` params struct ($\alpha$ an
+overall scale, $\beta$ a spread/shape parameter, $\gamma$ the modal/peak age). Eq. (3′) is singular
+at $a=0$ (division by $a$); `fertilityConventional` sets it to exactly $0$ for $a\le1$ rather than
+evaluate the formula there — its true $a\to0^+$ limit is $0$, but naively computed in floating point
+that limit comes out as $\mathrm{Inf}\times0=\mathrm{NaN}$ garbage instead. Note that Eq. (3′) is
+mathematically nonzero at *every* age $a>1$, however astronomically small (e.g. $\sim10^{-39}$ at
+$a=2$ with the fit defaults below) — unlike Eq. (3)'s hard cutoff at $a_{\min}/a_{\max}$, so a
+log-scale plot of it needs an explicit floor to stay readable (`doIt.m`'s rates panel sets one).
+Fit to the same empirical curve as Eq. (3) (§10), it matches noticeably *better* — lower pointwise
+SSE than the rough triangle (§10) — while also being a direct, unmodified instance of a named,
+widely-used fertility law.
 
 ## 4. Survivorship
 
@@ -203,20 +249,22 @@ $$
 $$
 
 This is a checkable prediction, not just an assertion: running `doIt.m` with
-`rateSource='parameterized'` and `targetR0` set to $1$ (its own default is empty, §5, so this needs
+`rateSource='conventional'` and `targetR0` set to $1$ (its own default is empty, §5, so this needs
 setting explicitly -- giving $\lambda=1$ exactly), the simulated final-year age distribution
-`N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)` to within $2\times10^{-10}$ after
+`N(:,end)/sum(N(:,end))` matches `survivorship/sum(survivorship)` to within $7\times10^{-12}$ after
 `nYears`$=500$ years, starting from the real-world (not the model's own stable) age distribution in
-the parameter table below — confirming Eq. (10) numerically to near machine precision. (Eq. (10) is
-specifically the $\lambda=1$ case; with `rateSource='empirical'` or any other non-empty `targetR0`,
-$\lambda\neq1$ in general, so the general $\ell(a)\lambda^{-a}$ form above it applies instead.)
+the parameter table below — confirming Eq. (10) numerically to near machine precision (the same check
+passes equally well under `rateSource='rough'`, since the argument in §8 doesn't depend on which
+curve family supplies $\ell(a)$). (Eq. (10) is specifically the $\lambda=1$ case; with
+`rateSource='empirical'` or any other non-empty `targetR0`, $\lambda\neq1$ in general, so the
+general $\ell(a)\lambda^{-a}$ form above it applies instead.)
 
 ---
 
 ## 9. Empirical rate alternative
 
-`rateSource='empirical'` (the project's own default) replaces Eqs. (1) and (3) with the current
-real-world age-specific rates for the World, rather than the hand-tuned shapes: fertility from the
+`rateSource='empirical'` replaces Eqs. (1)/(1′) and (3)/(3′) with the current real-world age-specific
+rates for the World directly, rather than any fit curve: fertility from the
 2023 age-specific fertility rate by 5-year age band (Our World in Data, 2026a, sourced from United
 Nations Population Division, 2024a), mortality from the 2021 life-table probability of dying within
 each age band (Our World in Data, 2026b, sourced from the World Health Organization's Global Health
@@ -261,98 +309,160 @@ replacement.)
 
 ---
 
-## 10. Fitting the parameterized shapes to empirical data
+## 10. Fitting the rough and conventional shapes to empirical data
 
-The `'parameterized'` defaults (Eqs. 1, 3) are not arbitrary hand-picks — they're a least-squares
-fit of those SAME functional forms to the `'empirical'` mortality/fertility curves of §9 (including
-§9's own old-age Gompertz extrapolation beyond age 84), via `fminsearch` (Nelder–Mead, unconstrained
-— parameters reparametrized through `exp`/logistic transforms to keep $\mu_i,\tau_i,\mu_0,\mu_1,\mu_2,k>0$;
-the cliff threshold was fit as a fraction of the fitting run's own `ageMax` then converted to the
-fixed absolute age $a_c$ used in Eq. (1) -- see the note at the end of §1 for why it's absolute now).
+The `'rough'` and `'conventional'` defaults (Eqs. 1, 1′, 3, 3′) are not arbitrary hand-picks — they're
+a live least-squares fit of those SAME functional forms to the `'empirical'` mortality/fertility
+curves of §9 (including §9's own old-age Gompertz extrapolation beyond age 84), run at the START of
+every `doIt.m` execution (not a one-off scratch calculation baked into the code): an early section
+calls `empiricalRates` to build the target curves, then `fitMortalityRough`, `fitMortalityConventional`,
+`fitFertilityRough`, and `fitFertilityConventional` to fit all four forward models against them,
+regardless of which `rateSource` is actually selected for the simulation itself. This means (1) if the
+empirical data in `empiricalRates` is ever updated with newer figures, every fitted default refits
+automatically on the next run, with no separate manual re-fitting step, and (2) the fitted parameter
+structs (`roughMortParams`, `convMortParams`, `roughFertParams`, `convFertParams`) are ordinary
+variables sitting in the workspace after the run, ready to inspect or override by hand
+(`roughMortParams.steepAge = 20;`) without touching the fitting code at all. Each of the four forward
+functions (`mortalityRough`, `mortalityConventional`, `fertilityRough`, `fertilityConventional`) also
+works standalone with no arguments beyond an age vector, falling back to the hardcoded values in the
+parameter table below (themselves just the fitted values from one such run, frozen as defaults) — so
+any of the four curves can be generated and plotted independently of `doIt.m`'s own simulation.
 
-**Mortality** is fit in LOG-hazard space (minimizing $\sum_a\big(\ln\mu_{\text{param}}(a)-\ln\mu_{\text{emp}}(a)\big)^2$)
-since $\mu$ spans several orders of magnitude with age. A first pass *without* the infant term
-(i.e. fitting only the baseline-plus-cliff part of Eq. 1) found $\mu_1\approx0$ and a mediocre fit
-(RMS log-residual $0.34$): with no term that's ever DEcreasing in age, that version of Eq. (1)
-structurally cannot represent the empirical curve's early-childhood dip (high at birth, lowest
-around age 5–14, then rising) — its best compromise just ignored that region. Adding the infant
-term (Eq. 1's first term) fixes this: refit jointly, RMS log-residual drops to $0.15$ (less than
-half), the childhood dip is now captured (visually near-exact from age $\sim$3 onward), and
-$\mu_1$ comes back to a real, nonzero value ($5.7\times10^{-4}$) since the baseline term is no
-longer needed to (badly) approximate the dip too.
+All four fits use `fminsearch` (Nelder–Mead, unconstrained — parameters reparametrized through `exp`
+transforms to keep every rate/scale parameter positive), and each fitting function's objective calls
+the actual forward-model function it is fitting (`fitMortalityRough`'s objective calls
+`mortalityRough`, and so on) rather than re-deriving a separate copy of the formula — deliberately, so
+the two can never silently drift out of sync. An earlier version of `fitFertilityRough` *did*
+re-derive Eq. (3)'s triangle inline and got its asymmetric truncation subtly wrong (a symmetric
+half-width with no independent left-edge cutoff), which fit visibly the wrong shape while still
+returning a low-looking pointwise error — calling the real function directly closes off that whole
+class of bug. All four fits also run from several different starting points (`multiStartFminsearch`),
+keeping whichever converges to the lowest objective value: Nelder–Mead's simplex-based search is
+sensitive enough to its starting point that a single fixed start sometimes stalled at a visibly worse
+local optimum (concretely, `fitFertilityRough`'s left fertile-age edge $a_{\min}$ turns out to be only
+weakly identified once the peak/right-edge/height are set — the empirical data is already near-zero
+there — so different starts could converge to different $a_{\min}$ values with very different final
+fit quality; multi-start reliably finds the best one).
+
+**Mortality** is fit in LOG-hazard space (minimizing
+$\sum_a\big(\ln\mu_{\text{fit}}(a)-\ln\mu_{\text{emp}}(a)\big)^2$) since $\mu$ spans several orders
+of magnitude with age. For the rough model (Eq. 1), a first pass *without* the infant term (i.e.
+fitting only the baseline-plus-cliff part) found $\mu_1\approx0$ and a mediocre fit: with no term
+that's ever DEcreasing in age, that version structurally cannot represent the empirical curve's
+early-childhood dip (high at birth, lowest around age 5–14, then rising) — its best compromise just
+ignored that region. Adding the infant term back fixes this, and the childhood dip is now captured
+(visually near-exact from age $\sim$3 onward). With the current live multi-start fit, both curve
+families land within a fraction of a percent of each other on fit quality — RMS log-residual
+$0.059$ (rough, Eq. 1) vs. $0.060$ (conventional/Siler, Eq. 1′) — confirming §1b's claim that Siler's
+literal form tracks the data about as well as the hand-tuned one, with no accuracy cost for using the
+standard form instead.
 
 **Fertility** is fit in LINEAR space, minimizing pointwise squared error PLUS a penalty on the
-resulting $R_0$'s mismatch from the empirical mode's own $R_0$ (§9), weighted by *this* mode's own
-survivorship (Eq. 4) since that's what actually gets used once plugged into Eq. (5):
+resulting $R_0$'s mismatch from the empirical mode's own $R_0$ (§9), weighted by *this* fit's own
+survivorship (Eq. 4, from the matching mortality fit) since that's what actually gets used once
+plugged into Eq. (5):
 
 $$
-\sum_a\big(b_{0,\text{param}}(a)-b_{0,\text{emp}}(a)\big)^2 \;+\;
-\Lambda\Big(\textstyle\sum_a \ell_{\text{param}}(a)\,b_{0,\text{param}}(a) - R_0^{\text{emp}}\Big)^2
+\sum_a\big(b_{0,\text{fit}}(a)-b_{0,\text{emp}}(a)\big)^2 \;+\;
+\Lambda\Big(\textstyle\sum_a \ell_{\text{fit}}(a)\,b_{0,\text{fit}}(a) - R_0^{\text{emp}}\Big)^2
 $$
 
 with $\Lambda$ large enough ($10^5$) to make the second term dominate. A pointwise-only fit
 ($\Lambda=0$) matches the empirical *shape* well (visually near-identical peak/width) but still
-landed at $R_0\approx1.01$ against the empirical $R_0\approx1.06$ — a $\sim$5% shortfall traced
-to two compounding effects, roughly half each: (i) the empirical curve has real, small fertility
-just outside a pointwise-fit window's edges (the 10–14 and 45+ age bands) that a hard triangular
-cutoff misses entirely regardless of how well it fits inside the window; (ii) even inside the
-window, minimizing pointwise error doesn't preserve the curve's *area* — the fit slightly overshoots
-near the peak and undershoots at the edges, and those don't cancel. Adding the $R_0$ penalty lets
-the optimizer trade a negligible amount of pointwise fit (SSE $0.00196$ vs. $0.00195$) for a wider
-window ($a_{\min}$ drops to $12.1$) that closes both gaps at once — by construction, since $R_0$
-matching is now directly in the objective, not a hoped-for side effect of shape matching.
+undershoots the empirical $R_0\approx1.06$ — traced to two compounding effects, roughly half each:
+(i) the empirical curve has real, small fertility just outside a pointwise-fit window's edges (the
+10–14 and 45+ age bands) that a hard triangular cutoff misses entirely regardless of how well it fits
+inside the window; (ii) even inside the window, minimizing pointwise error doesn't preserve the
+curve's *area* — the fit slightly overshoots near the peak and undershoots at the edges, and those
+don't cancel. Adding the $R_0$ penalty closes both gaps at once, by construction, since $R_0$ matching
+is now directly in the objective rather than a hoped-for side effect of shape matching — both the
+rough (Eq. 3) and conventional/Hadwiger (Eq. 3′) fits land on $R_0=1.060288$, matching the empirical
+target to within floating-point precision. On pointwise fit alone, Hadwiger's smooth curve does
+noticeably better than the rough triangle: SSE $0.00137$ (conventional) vs. $0.00196$ (rough) — the
+concrete sense in which §3b's "matches noticeably better" claim holds.
 
-**Cross-validation**: running the fit defaults with `targetR0=[]` (completely unscaled, §5) now gives
+**Cross-validation**: running either fit's defaults with `targetR0=[]` (completely unscaled, §5) gives
 $R_0\approx1.06$, matching the empirical mode's own $R_0$ (§9) essentially exactly — by design, per
 the $R_0$-matching term above, but confirming it actually works when plugged into the full model
-rather than just the fitting script.
+rather than just the fitting functions in isolation.
 
 ---
 
-## 11. Relation to the demographic literature; suggested refinements
+## 11. Relation to the demographic literature: what's implemented, what's still suggested
 
 The core machinery — Leslie-matrix cohort projection (Leslie, 1945) and the Euler–Lotka steady-state
 condition (Euler, 1760/1970; Sharpe & Lotka, 1911) — is standard, unmodified demographic theory; §8's
 derivation is textbook stable-population theory, not a novel or simplified version of it. The
-simplifications worth flagging are all in the *inputs* to that machinery, not the machinery itself:
+simplifications worth flagging are all in the *inputs* to that machinery, not the machinery itself.
+Two of the three below are now implemented as a selectable alternative (`rateSource='conventional'`);
+sex structure remains a suggested refinement, not yet built:
 
-| Where | This model | Standard practice | Suggested refinement |
+| Where | This model's rough form | Standard practice | Status |
 |---|---|---|---|
-| Mortality shape (Eq. 1, §1) | 3-term hazard, but with a *thresholded, shifted* senescent term and a *rising* (not constant) background term | Siler's (1979) or Heligman & Pollard's (1980) 3-/8-term hazards: smooth, unthresholded from birth; Heligman-Pollard adds a distinct young-adult "accident hump" | Refit Eq. (1) as a literal Siler model ($\mu_i e^{-a/\tau_i} + \mu_0 + \mu_2 e^{k a}$, no threshold) — same parameter count, standard form, removes the somewhat ad hoc cliff construction |
-| Fertility shape (Eq. 3, §3) | Piecewise-linear triangle, hard cutoffs, kinked peak | Smooth, right-skewed unimodal curves: Hadwiger (1940), Coale & Trussell (1974), Schmertmann (2003) | Swap in a Hadwiger function (same $\sim$4 parameters, smooth, standard, well-suited to a hand fit) |
-| Sex structure (assumption 2; Eq. 12, §9) | None — one population, $p_f=0.5$ fixed | Nearly all demographic models track males/females separately, since fertility is female-specific and mortality differs by sex at every age; real sex ratio at birth $\approx1.05$ boys/girl (United Nations Population Division, 2024b) | Split $N(a,t)$ into male/female vectors with their own mortality; only females contribute to Eq. (7c) |
-| No migration/density-dependence (assumption 3) | Rates fixed, independent of $t$ or $P(t)$ | Standard for a *closed*, deterministic stable-population exercise like this one (the same assumption Euler–Lotka itself requires, §8) — not a simplification relative to the classical theory, just a scope choice | None needed for this model's own stated purpose; would need revisiting only if migration or crowding effects become a modelling goal |
-| Initial age distribution | Current real-world structure (CIA World Factbook, 2021, via IndexMundi) | Same kind of source real demographic projections start from | None — this one already matches practice |
+| Mortality shape (Eq. 1, §1a) | 3-term hazard, but with a *thresholded, shifted* senescent term and a *rising* (not constant) background term | Siler's (1979) or Heligman & Pollard's (1980) 3-/8-term hazards: smooth, unthresholded from birth; Heligman-Pollard adds a distinct young-adult "accident hump" | **Implemented** — Eq. (1′)/§1b is a literal Siler model, selectable via `rateSource='conventional'` (`mortalityConventional`); fits the empirical data about as well as Eq. (1) (§10). Heligman-Pollard's accident hump is still absent from both forms |
+| Fertility shape (Eq. 3, §3a) | Piecewise-linear triangle, hard cutoffs, kinked peak | Smooth, right-skewed unimodal curves: Hadwiger (1940), Coale & Trussell (1974), Schmertmann (2003) | **Implemented** — Eq. (3′)/§3b is a literal Hadwiger function, selectable via `rateSource='conventional'` (`fertilityConventional`); fits the empirical data noticeably better than Eq. (3) (§10). Coale & Trussell and Schmertmann remain unimplemented alternatives |
+| Sex structure (assumption 2; Eq. 12, §9) | None — one population, $p_f=0.5$ fixed | Nearly all demographic models track males/females separately, since fertility is female-specific and mortality differs by sex at every age; real sex ratio at birth $\approx1.05$ boys/girl (United Nations Population Division, 2024b) | **Suggested, not implemented** — would split $N(a,t)$ into male/female vectors with their own mortality; only females contribute to Eq. (7c) |
+| No migration/density-dependence (assumption 3) | Rates fixed, independent of $t$ or $P(t)$ | Standard for a *closed*, deterministic stable-population exercise like this one (the same assumption Euler–Lotka itself requires, §8) — not a simplification relative to the classical theory, just a scope choice | Not applicable — matches the classical theory's own scope; would need revisiting only if migration or crowding effects become a modelling goal |
+| Initial age distribution | Current real-world structure (CIA World Factbook, 2021, via IndexMundi) | Same kind of source real demographic projections start from | Not applicable — this one already matches practice |
 
 None of these change the model's core conclusion (§8): Leslie-matrix projection plus the Euler–Lotka
 condition is exact, standard theory regardless of which mortality/fertility functional forms feed
-into it. The suggested refinements would make the *inputs* more standard and slightly more accurate
-(smoother fertility, a proper Siler-form mortality, sex structure) without touching that conclusion.
+into it. The two implemented refinements make the *inputs* more standard without touching that
+conclusion — `rateSource='conventional'` reaches the same steady-state machinery through literal,
+named demographic laws instead of hand-tuned shapes. Sex structure is the one refinement in this
+table that would still require real new modelling work (a second, sex-specific state vector and
+mortality schedule) rather than swapping in an existing closed form.
 
 ---
 
 ## Parameter reference
 
+**Simulation-level parameters:**
+
 | symbol | code | default | meaning |
 |---|---|---|---|
-| $A$ | `ageMax` | $1000$ | oldest age class (plus-group). Deliberately large -- see the note at the end of §1 -- so the plus-group holds negligible population; independent of the curves below |
+| $A$ | `ageMax` | $1000$ | oldest age class (plus-group). Deliberately large -- see the note at the end of §1a -- so the plus-group holds negligible population; independent of the curves below |
 | — | `ageMaxDisplay` | $100$ | age axis limit in the plots ONLY; purely cosmetic, no effect on the simulation |
 | $T$ | `nYears` | $500$ | simulation horizon |
 | — | `popInit` | $8\times10^9$ | total starting population |
 | — | — | — | initial age distribution: current real-world world age structure (Central Intelligence Agency, 2021, via IndexMundi: 0-14 25.2%, 15-24 15.3%, 25-54 40.6%, 55-64 9.2%, 65+ 9.7%), not the model's own stable shape -- see Eq. (10) |
-| $\mu_i$ | `infantMortalityScale` | $0.0129$ | excess hazard at age $0$ from the infant-mortality term (fit, §10; optimizer: $0.0128711$) |
-| $\tau_i$ | `infantMortalityDecay` | $1.21$ | its decay time constant, years (fit, §10; optimizer: $1.20517$) |
-| $\mu_0$ | `deathRateBase` | $0.00066$ | baseline hazard at age $0$, excluding the infant term (fit, §10; optimizer: $0.000659275$) |
-| $\mu_1$ | `deathRateSlope` | $0.00057$ | added baseline hazard at age $A_{\text{ref}}$ (fit, §10; optimizer: $0.000572547$) |
-| $A_{\text{ref}}$ | `ageRef` | $150$ | fixed reference age for $\mu_1$'s term -- NOT `ageMax` (§1) |
-| $a_c$ | `steepAge` | $11.01$ | absolute age where the senescence cliff begins -- NOT a fraction of `ageMax` (§1; fit, §10; optimizer: $11.0086$) |
-| $\mu_2$ | `steepMortalityScale` | $0.000227$ | extra-hazard scale past the cliff (fit, §10; optimizer: $0.000226789$) |
-| $k$ | `steepMortalityRate` | $0.0836$ | extra-hazard growth rate past the cliff (fit, §10; optimizer: $0.083606$) |
-| $a_{\min}$ | `fertileMin` | $12.1$ | youngest fertile age (fit incl. R0-matching, §10; optimizer: $12.0851$) |
-| $a_{\max}$ | `fertileMax` | $42.6$ | oldest fertile age (fit incl. R0-matching, §10; optimizer: $42.6161$) |
-| $a^*$ | `fertilityPeakAge` | $27.0$ | age of peak fertility (fit, §10; optimizer: $27.0495$) |
-| $b_{\max}$ | `fertilityPeakRate` | $0.0713$ | per-capita rate at $a^*$ (fit incl. R0-matching, §10; optimizer: $0.07127$) |
+| — | `rateSource` | `'conventional'` | which curve family supplies $\mu(a)$/$b_0(a)$: `'rough'` (Eq. 1, 3), `'conventional'` (Eq. 1′, 3′), or `'empirical'` (§9, raw age-band data) |
 | $R_0^{\text{target}}$ | `targetR0` | empty (`[]`) | net reproduction rate target; empty = don't rescale, just estimate/report $R_0$ (§5); a number ($1=$steady, $>1=$growth, $<1=$decline) rescales fertility to hit it exactly |
+
+**Rough model (Eq. 1, 3) fitted defaults** -- all live-fit by `fitMortalityRough`/`fitFertilityRough`
+(§10) every run; values below are that fit's own current result, frozen into `mortalityRough`'s and
+`fertilityRough`'s no-argument defaults:
+
+| symbol | code | default | meaning |
+|---|---|---|---|
+| $\mu_i$ | `infantMortalityScale` | $0.012589$ | excess hazard at age $0$ from the infant-mortality term |
+| $\tau_i$ | `infantMortalityDecay` | $1.2306$ | its decay time constant, years |
+| $\mu_0$ | `deathRateBase` | $0.00064457$ | baseline hazard at age $0$, excluding the infant term |
+| $\mu_1$ | `deathRateSlope` | $0.00057295$ | added baseline hazard at age $A_{\text{ref}}$ |
+| $A_{\text{ref}}$ | `ageRef` | $150$ | fixed reference age for $\mu_1$'s term -- NOT `ageMax` (§1a); not fit, held constant |
+| $a_c$ | `steepAge` | $11.0$ | absolute age where the senescence cliff begins -- NOT a fraction of `ageMax` (§1a) |
+| $\mu_2$ | `steepMortalityScale` | $0.00023021$ | extra-hazard scale past the cliff |
+| $k$ | `steepMortalityRate` | $0.083487$ | extra-hazard growth rate past the cliff |
+| $a_{\min}$ | `fertileMin` | $12.992$ | youngest fertile age (fit incl. R0-matching, §10) |
+| $a_{\max}$ | `fertileMax` | $42.652$ | oldest fertile age (fit incl. R0-matching, §10) |
+| $a^*$ | `fertilityPeakAge` | $27.037$ | age of peak fertility |
+| $b_{\max}$ | `fertilityPeakRate` | $0.071173$ | per-capita rate at $a^*$ (fit incl. R0-matching, §10) |
+
+**Conventional model (Eq. 1′, 3′) fitted defaults** -- all live-fit by
+`fitMortalityConventional`/`fitFertilityConventional` (§10) every run; values below are that fit's own
+current result, frozen into `mortalityConventional`'s and `fertilityConventional`'s no-argument
+defaults:
+
+| symbol | code | default | meaning |
+|---|---|---|---|
+| $a_1$ | `a1` | $0.012163$ | infant/juvenile hazard scale at age $0$ (Eq. 1′) |
+| $a_2$ | `a2` | $0.75018$ | infant/juvenile hazard decay rate, $\text{y}^{-1}$ |
+| $a_3$ | `a3` | $0.00043079$ | constant background hazard |
+| $a_4$ | `a4` | $9.1977\times10^{-5}$ | senescent hazard scale |
+| $a_5$ | `a5` | $0.083486$ | senescent hazard growth rate, $\text{y}^{-1}$ |
+| $\alpha$ | `a` | $0.62758$ | fertility overall level (Eq. 3′) |
+| $\beta$ | `b` | $2.7152$ | fertility spread/shape |
+| $\gamma$ | `c` | $28.199$ | fertility modal (peak) age, years |
 
 ---
 
@@ -369,8 +479,9 @@ into it. The suggested refinements would make the *inputs* more standard and sli
    Euler–Lotka argument (§8) apply cleanly, and matches what that classical theory itself assumes
    (§11) — not an extra simplification layered on top of it.
 4. **Plus-group at $A$** (Eq. 7b) — the oldest class is an absorbing bin, not a hard cutoff; nobody
-   is assumed to die exactly at age $A$, though the senescence cliff (Eq. 1) makes survival past it
-   very unlikely with default parameters.
+   is assumed to die exactly at age $A$, though the rising senescent hazard (Eq. 1's cliff term, or
+   Eq. 1′'s smooth exponential) makes survival past it very unlikely with default parameters, under
+   either curve family.
 
 ---
 

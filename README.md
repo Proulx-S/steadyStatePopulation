@@ -2,9 +2,10 @@
 
 A minimal age-structured (Leslie-matrix / cohort-component; Leslie, 1945) population model in
 MATLAB. Age-dependent birth (fertility) and death (mortality) rates drive a population of yearly
-age cohorts forward in time. By default (`rateSource='parameterized'`) those rates are smooth Gompertz
-(mortality) and triangular (fertility) curves — but not arbitrary ones: they're fit to the world's
-actual current age-specific rates, shape AND net reproduction rate both (see [Rate
+age cohorts forward in time. By default (`rateSource='conventional'`) those rates are literal
+instances of two standard demographic laws — Siler's (1979) mortality model and Hadwiger's (1940)
+fertility function — but not with arbitrary parameters: they're fit to the world's actual current
+age-specific rates, shape AND net reproduction rate both (see [Rate
 source](#rate-source)/[populationModel.md](populationModel.md) §10), so they closely track reality
 while staying analytically simple. By default (`targetR0=[]`) they're also left unscaled, so the
 model reports whatever net reproduction rate that fit implies (currently R0 ≈ 1.06, matching the
@@ -16,10 +17,10 @@ see [`populationModel.md`](populationModel.md) for why that particular calibrati
 
 - **top-left** — the age-dependent rates driving the model: mortality (red) and fertility (green)
   by age, on a log axis (mortality alone spans several orders of magnitude even just up to
-  `ageMaxDisplay`). Both rate sources show the same real U-shaped mortality pattern (high at birth,
-  a childhood minimum, then rising) — the default parameterized curves are a smooth fit to it
-  (populationModel.md §10); switch to `rateSource='empirical'` to see the real, unsmoothed age-band
-  data instead.
+  `ageMaxDisplay`). All three rate sources show the same real U-shaped mortality pattern (high at
+  birth, a childhood minimum, then rising) — the default `'conventional'` curves are a smooth fit to
+  it (populationModel.md §10); switch to `rateSource='empirical'` to see the real, unsmoothed
+  age-band data instead, or `rateSource='rough'` for this project's own hand-built alternative fit.
 - **top-right** — total population over time. Its *shape* settles quickly regardless; whether the
   *total* itself levels off depends on [`targetR0`](#net-reproduction-rate-r0) — it doesn't by
   default (`targetR0=[]`, mild growth at whatever R0 the rates actually imply), but does with
@@ -41,28 +42,41 @@ Two things in the `CONTROL PANEL` worth knowing:
   tracks age classes — kept large so the plus-group (§6 of `populationModel.md`) holds negligible
   population, not to be looked at directly. `ageMaxDisplay` (100 by default) is a separate, purely
   cosmetic axis limit for the plots. They used to be conflated (`ageMax` alone controlled both), and
-  the parameterized rate curves used to silently change shape with `ageMax` too (fixed — see
-  `populationModel.md` §1's note at the end).
-- **`rateFit = getFittedRateParams()`** bundles all 12 `'parameterized'`-mode mortality/fertility
-  constants into one struct, populated by a local function at the bottom of `doIt.m` (self-populating
-  defaults, same pattern as a no-arg opts function) — they're fit jointly as a set (§10), so this
-  keeps them from being tweaked individually out of sync with each other by accident. Override any
-  field after the call to explore off the fitted defaults, e.g. `rateFit.steepAge = 20;`.
+  the rough/conventional rate curves used to silently change shape with `ageMax` too (fixed — see
+  `populationModel.md` §1a's note at the end).
+- **Fitting happens live, every run.** Right after `ageVec` is built, `doIt.m` calls
+  `empiricalRates` to get the current real-world mortality/fertility curves, then
+  `fitMortalityRough`, `fitMortalityConventional`, `fitFertilityRough`, and
+  `fitFertilityConventional` to fit all four forward models against them — regardless of which
+  `rateSource` you've picked, so switching sources is instant and every fitted parameter struct
+  (`roughMortParams`, `convMortParams`, `roughFertParams`, `convFertParams`) is always available in
+  the workspace afterward to inspect or manually tweak, e.g. `roughMortParams.steepAge = 20;` (then
+  re-run, or call `mortalityRough(ageVec, roughMortParams)` directly). If the empirical data in
+  `empiricalRates` ever changes, every fitted default refits automatically — no separate manual
+  re-fitting step (populationModel.md §10). Each of the four forward-model functions
+  (`mortalityRough`, `mortalityConventional`, `fertilityRough`, `fertilityConventional`) also works
+  standalone with just an age vector, falling back to hardcoded defaults from one such fit.
 
 ## Rate source
 
-`rateSource` (a `CONTROL PANEL` parameter, default `'parameterized'`) picks between two
+`rateSource` (a `CONTROL PANEL` parameter, default `'conventional'`) picks between three
 independent implementations of the mortality/fertility curves, selected by a `switch` in
 `doIt.m` — everything downstream (survival, R0, the cohort simulation) uses whichever
 `mortality(age)`/`fertility(age)` that switch produces, unchanged. Whether fertility gets rescaled
 to `targetR0` is a *separate*, independent choice — see [Net reproduction rate
 (R0)](#net-reproduction-rate-r0) — orthogonal to which rate source is picked here:
 
-- **`'parameterized'`** (default) — smooth Gompertz-plus-senescence-cliff mortality (Eq. 1) and
-  triangular fertility (Eq. 3) from [`populationModel.md`](populationModel.md). Its defaults aren't
-  arbitrary: they're a fit to the `'empirical'` curves below (§10) -- for fertility, shape AND net
-  reproduction rate both, not shape alone -- so even fully unscaled (`targetR0=[]`) they land at
-  essentially the real R0 (≈1.06).
+- **`'conventional'`** (default) — literal instances of two standard demographic laws: Siler's
+  (1979) competing-hazards mortality model (Eq. 1′) and Hadwiger's (1940) fertility function
+  (Eq. 3′) from [`populationModel.md`](populationModel.md), implemented as `mortalityConventional`
+  and `fertilityConventional`. Their defaults aren't arbitrary: they're a fit to the `'empirical'`
+  curves below (§10) -- for fertility, shape AND net reproduction rate both, not shape alone -- so
+  even fully unscaled (`targetR0=[]`) they land at essentially the real R0 (≈1.06).
+- **`'rough'`** — this project's own hand-built alternative: a Gompertz-plus-senescence-cliff
+  mortality curve (Eq. 1) and a triangular fertility pulse (Eq. 3), implemented as `mortalityRough`
+  and `fertilityRough`. Fit to the same `'empirical'` curves the same way as `'conventional'`
+  (§10); tracks the data about as well for mortality, slightly less well for fertility (§10) — kept
+  as a simpler, closed-form comparison point.
 - **`'empirical'`** — the current real-world age-specific rates for the World: fertility from the
   2023 age-specific fertility rate by 5-year age band (Our World in Data, 2026a, sourced from the
   UN Population Division, 2024a), and mortality from the 2021 life table's probability of dying
@@ -73,7 +87,8 @@ to `targetR0` is a *separate*, independent choice — see [Net reproduction rate
   itself a simplification — the real figure is closer to 48.8% female at birth; UN Population
   Division, 2024b). Mortality beyond the data's oldest covered age (84) is extrapolated with a
   Gompertz (log-linear) fit to the last 5 empirical bands, rather than left undefined out to
-  `ageMax`. Full citations in [References](#references).
+  `ageMax`. Full citations in [References](#references). This is the fitting *target* for both
+  `'conventional'` and `'rough'` above (§10), via the `empiricalRates` function.
 
 ## Net reproduction rate (R0)
 
@@ -87,10 +102,10 @@ What happens next depends on `targetR0` (a `CONTROL PANEL` parameter, default em
 independent of [rate source](#rate-source), and works the same way for either:
 
 - **`targetR0` empty** (default) — `fertility = fertilityShape` is used as-is; R0 is simply computed
-  and reported (in the figure title), not targeted. Meaningful for both rate sources, since
-  `fertilityShape` is already in real per-capita-rate units either way (parameterized mode's own
-  peak-rate parameter, `fertilityPeakRate`, makes this so — see
-  [`populationModel.md`](populationModel.md) Eq. 3).
+  and reported (in the figure title), not targeted. Meaningful for all three rate sources, since
+  `fertilityShape` is already in real per-capita-rate units either way (`'rough'`'s own peak-rate
+  parameter, `fertilityPeakRate`, and `'conventional'`'s Hadwiger scale parameter `a` both make this
+  so — see [`populationModel.md`](populationModel.md) Eqs. 3, 3′).
 - **`targetR0` a number** — fertility is rescaled so R0 hits it exactly:
   `fertility = fertilityShape * (targetR0 / R0)`. `targetR0 = 1` isn't just a plausible-looking
   number, it's the exact condition for a long-run steady population (`>1` grows, `<1` declines); see
@@ -100,15 +115,17 @@ independent of [rate source](#rate-source), and works the same way for either:
 ## Relation to the literature
 
 The core method — Leslie-matrix cohort projection (Leslie, 1945) and the Euler–Lotka steady-state
-condition (Sharpe & Lotka, 1911) — is standard, unmodified demographic theory. The simplifications
-are all in the parameterized curve *shapes*, not the machinery: the mortality formula is
+condition (Sharpe & Lotka, 1911) — is standard, unmodified demographic theory. The curve *shapes*
+feeding into it come in two flavors: `rateSource='rough'`'s mortality formula is
 Siler (1979)/Heligman & Pollard (1980)-*inspired* (their classic infant + background + senescent
-competing-hazards template) but not a literal instance of either, and the triangular fertility
+competing-hazards template) but not a literal instance of either, and its triangular fertility
 shape is a simplification of the smooth, right-skewed curves standard in the field (Hadwiger, 1940;
-Coale & Trussell, 1974; Schmertmann, 2003). [`populationModel.md`](populationModel.md) §11 works
-through each comparison in detail and suggests concrete, similarly-simple drop-in replacements
-(e.g. a literal Siler mortality law; a Hadwiger fertility curve) for anyone who wants the model
-closer to current demographic practice.
+Coale & Trussell, 1974; Schmertmann, 2003); `rateSource='conventional'` (the default) instead uses a
+*literal* Siler mortality law and Hadwiger fertility function, matching the data about as well or
+better (populationModel.md §10) while being direct instances of named, standard demographic laws
+rather than simplified variants of them. [`populationModel.md`](populationModel.md) §11 works
+through each comparison in detail — including sex structure, still unimplemented — and what's left
+to bring the model even closer to current demographic practice.
 
 ## Formalism
 
