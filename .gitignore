@@ -1,0 +1,18 @@
+
+
+# scratch/ -- THE canonical place for throwaway agent/dev scratch (probe scripts, run logs, one-off
+# verification files). Per Seb 2026-09-05: throwaway scratch belongs INSIDE the repo/worktree so
+# that everything related to a change sits in one place, but in a folder git never sees, so that no
+# cleanup step is ever needed before committing and no recursive rm is ever required.
+#
+# The `scratch/*` + `!scratch/.gitkeep` pair is deliberate, not redundant: git cannot track an
+# empty directory, so the tracked .gitkeep is what makes scratch/ MATERIALIZE automatically in
+# every clone and every future `git worktree add` -- there is no project-initialization step to
+# remember and nothing for a new session to create.
+scratch/*
+!scratch/.gitkeep
+# Bare `tmp/` too -- a safety net, not the canonical name. `tmp/` is what an agent reaches for by
+# instinct, and a `tmp_*/` rule does NOT match a bare `tmp` (the trailing-underscore glob needs the
+# underscore). Ignoring it makes the instinctive slip harmless instead of requiring an rm. The
+# canonical name remains scratch/.
+tmp/
